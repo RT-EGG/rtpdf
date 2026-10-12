@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Rtpdf.Core/Rtpdf.Core.csproj" />
+  <Project Path="Rtpdf.Core.Tests/Rtpdf.Core.Tests.csproj" />
+</Solution>
