@@ -23,6 +23,16 @@ public sealed class PdfLexer
         _input = buffer.ToArray();
     }
 
+    internal PdfLexer(byte[] input, int startOffset)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentOutOfRangeException.ThrowIfNegative(startOffset);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(startOffset, input.Length);
+
+        _input = input;
+        _position = startOffset;
+    }
+
     public int Position => _position;
 
     public PdfToken Read()

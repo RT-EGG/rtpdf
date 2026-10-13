@@ -65,6 +65,10 @@ public sealed class PdfObjectParser
         return ParseObject(0);
     }
 
+    internal PdfToken PeekToken(int offset = 0) => Peek(offset);
+
+    internal PdfToken ReadToken() => Consume();
+
     private PdfObject ParseObject(int nestingDepth)
     {
         var token = Peek();
