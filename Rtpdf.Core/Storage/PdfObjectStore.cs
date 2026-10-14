@@ -16,6 +16,7 @@ public sealed class PdfObjectStore
     private readonly PdfObjectStoreOptions _options;
     private readonly PdfIndirectObjectParser _parser;
     private readonly Dictionary<PdfObjectId, PdfIndirectObject> _cache = [];
+    private readonly HashSet<PdfObjectId> _loading = [];
     private readonly object _syncRoot = new();
 
     public PdfObjectStore(
@@ -160,37 +161,62 @@ public sealed class PdfObjectStore
                 byteOffset);
         }
 
-        PdfIndirectObject parsed;
+        if (!_loading.Add(objectId))
+        {
+            throw new PdfObjectResolutionException(
+                "Cyclic indirect-object dependency detected",
+                objectId,
+                byteOffset);
+        }
+
         try
         {
-            parsed = _parser.Parse(_input, (int)byteOffset);
-        }
-        catch (Exception exception) when (exception is PdfParseException or PdfLexerException)
-        {
-            throw new PdfObjectResolutionException(
-                "Indirect object syntax is invalid",
-                objectId,
-                byteOffset,
-                exception);
-        }
+            PdfIndirectObject parsed;
+            try
+            {
+                parsed = _parser.Parse(_input, (int)byteOffset, ResolveStreamLength);
+            }
+            catch (Exception exception) when (exception is PdfParseException or PdfLexerException)
+            {
+                throw new PdfObjectResolutionException(
+                    "Indirect object syntax is invalid",
+                    objectId,
+                    byteOffset,
+                    exception);
+            }
+            catch (PdfObjectResolutionException exception)
+            {
+                throw new PdfObjectResolutionException(
+                    "Indirect object dependency could not be resolved",
+                    objectId,
+                    byteOffset,
+                    exception);
+            }
 
-        if (parsed.ObjectId != objectId)
-        {
-            throw new PdfObjectResolutionException(
-                $"Object declaration identifies {parsed.ObjectId} instead of the requested object",
-                objectId,
-                byteOffset);
-        }
+            if (parsed.ObjectId != objectId)
+            {
+                throw new PdfObjectResolutionException(
+                    $"Object declaration identifies {parsed.ObjectId} instead of the requested object",
+                    objectId,
+                    byteOffset);
+            }
 
-        if (_cache.Count >= _options.MaximumCachedObjects)
-        {
-            throw new PdfObjectResolutionException(
-                $"Object cache exceeds the configured limit of {_options.MaximumCachedObjects}",
-                objectId,
-                byteOffset);
-        }
+            if (_cache.Count >= _options.MaximumCachedObjects)
+            {
+                throw new PdfObjectResolutionException(
+                    $"Object cache exceeds the configured limit of {_options.MaximumCachedObjects}",
+                    objectId,
+                    byteOffset);
+            }
 
-        _cache.Add(objectId, parsed);
-        return parsed;
+            _cache.Add(objectId, parsed);
+            return parsed;
+        }
+        finally
+        {
+            _loading.Remove(objectId);
+        }
     }
+
+    private PdfObject ResolveStreamLength(PdfIndirectReference reference) => Resolve(reference);
 }

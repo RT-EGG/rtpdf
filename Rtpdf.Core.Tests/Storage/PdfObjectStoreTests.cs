@@ -100,17 +100,31 @@ public sealed class PdfObjectStoreTests
     }
 
     [Fact]
-    public void ResolveReportsStreamObjectsAsUnsupportedUntilStreamParsingIsImplemented()
+    public void ResolveLoadsStreamWhoseLengthIsAnIndirectObject()
     {
         var document = CreateDocument(
-            new ObjectDefinition(1, 0, "<< /Length 0 >>\nstream\n\nendstream"));
+            new ObjectDefinition(1, 0, "<< /Length 2 0 R >>\nstream\nhello\nendstream"),
+            new ObjectDefinition(2, 0, "5"));
+        var store = new PdfObjectStore(document.Bytes, document.Table);
+
+        var stream = store.Resolve<PdfStream>(new PdfIndirectReference(1));
+
+        Assert.Equal("hello"u8.ToArray(), stream.GetEncodedDataCopy());
+        Assert.Equal(2, store.CachedObjectCount);
+    }
+
+    [Fact]
+    public void ResolveRejectsCyclicStreamLengthDependency()
+    {
+        var document = CreateDocument(
+            new ObjectDefinition(1, 0, "<< /Length 1 0 R >>\nstream\n\nendstream"));
         var store = new PdfObjectStore(document.Bytes, document.Table);
 
         var exception = Assert.Throws<PdfObjectResolutionException>(() =>
             store.Resolve(new PdfIndirectReference(1)));
 
-        Assert.Contains("syntax is invalid", exception.Message);
-        Assert.Contains("Stream objects", exception.InnerException!.Message);
+        Assert.Contains("dependency", exception.Message);
+        Assert.IsType<PdfObjectResolutionException>(exception.InnerException);
     }
 
     [Fact]
