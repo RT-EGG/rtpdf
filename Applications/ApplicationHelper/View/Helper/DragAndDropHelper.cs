@@ -1,7 +1,7 @@
 ﻿using Avalonia.Input;
 using Avalonia.Interactivity;
 
-namespace ApplicationHelper.View;
+namespace ApplicationHelper.View.Helper;
 
 public class DragAndDropHelper
 {

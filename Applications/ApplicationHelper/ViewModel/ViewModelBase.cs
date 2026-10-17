@@ -2,6 +2,6 @@
 
 namespace ApplicationHelper.ViewModel;
 
-public class ViewModelBase : ObservableObject
+public partial class ViewModelBase : ObservableObject
 {
 }

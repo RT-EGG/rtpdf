@@ -1,4 +1,6 @@
-﻿using Avalonia;
+﻿using ApplicationHelper.Theme;
+using ApplicationHelper.View.Dialogs;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Themes.Fluent;
 using Rtpdf.Inspector.ViewModels;
@@ -26,14 +28,17 @@ sealed class Program
     private static void AppMain(Application app, string[] args)
     {
         app.Styles.Add(new FluentTheme());
+        app.Styles.Add(ColumnedListBoxTheme.Create(ColumnedListBoxTheme.Palettes.Default));
 
-        var window = new MainView
+        var viewModel = new MainViewModel();
+        var window = new MainView(viewModel)
         {
-            DataContext = new MainViewModel(),
             Title = "Inspector",
-            Width = 300,
-            Height = 150,
+            Width = 600,
+            Height = 400,
         };
+
+        DialogBase.SetMainWindow(window);
 
         window.Show();
         app.Run(window);

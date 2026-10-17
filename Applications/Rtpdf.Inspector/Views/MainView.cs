@@ -1,7 +1,6 @@
 ﻿using ApplicationHelper;
-using ApplicationHelper.View;
+using ApplicationHelper.View.Helper;
 using Avalonia.Controls;
-using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -16,14 +15,15 @@ namespace Rtpdf.Inspector.Views;
 [HotReloadTrigger]
 internal class MainView : Window
 {
-    private MainViewModel ViewModel => (MainViewModel)DataContext!;
+    private MainViewModel _viewModel;
 
-    public MainView()
+    public MainView(MainViewModel viewModel)
     {
 #if DEBUG
         HotReloadHandler.OnHotReload += OnHotReload;
 #endif
 
+        _viewModel = viewModel;
         Content = RenderContent();
     }
 
@@ -46,32 +46,33 @@ internal class MainView : Window
 
     private Control RenderContent()
     {
-        var panel = new StackPanel
+        if (_viewModel.PdfFileViewModel is null)
         {
-            VerticalAlignment = VerticalAlignment.Stretch,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Spacing = 4.0,
-
-            Children =
+            var panel = new ContentControl
             {
-                new TextBlock
+                VerticalAlignment = VerticalAlignment.Stretch,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Background = Brushes.Transparent, // D&Dを有効にするために背景をnull以外に設定
+
+                Content = new TextBlock
                 {
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    VerticalAlignment = VerticalAlignment.Stretch,
-                    TextAlignment = TextAlignment.Left,
+                    Text = "Drag and drop a PDF file here",
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    TextAlignment = TextAlignment.Center,
                     FontSize = 24,
-                    [!TextBlock.TextProperty] = CompiledBinding.Create<MainViewModel, string>(
-                        source: ViewModel,
-                        expression: vm => vm.Greeting,
-                        mode: BindingMode.OneWay
-                    )
-                }
-            },
-        };
+                },
+            };
 
-        DragAndDropHelper.Setup(panel, OnDragOver, OnDrop);
+            DragAndDropHelper.Setup(panel, OnDragOver, OnDrop);
 
-        return panel;
+            return panel;
+        }
+
+        var fileView = new PdfFileView(_viewModel.PdfFileViewModel).Render();
+        DragAndDropHelper.Setup(fileView, OnDragOver, OnDrop);
+
+        return fileView;
     }
 
     private void OnDragOver(object? sender, DragEventArgs e)
@@ -109,5 +110,14 @@ internal class MainView : Window
         }
 
         var filePath = files.First().Path.LocalPath;
+
+        try
+        {
+            await _viewModel.LoadFromFileAsync(filePath);
+        }
+        finally
+        {
+            Content = RenderContent();
+        }
     }
 }

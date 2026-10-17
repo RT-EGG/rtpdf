@@ -8,7 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
@@ -25,6 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Rtpdf.Core\Rtpdf.Core.csproj" />
     <ProjectReference Include="..\ApplicationHelper\ApplicationHelper.csproj" />
   </ItemGroup>
 </Project>
