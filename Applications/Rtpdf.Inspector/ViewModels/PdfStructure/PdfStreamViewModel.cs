@@ -1,4 +1,5 @@
 ﻿using Rtpdf.Core.Objects;
+using Rtpdf.Core.Storage;
 
 namespace Rtpdf.Inspector.ViewModels.PdfStructure;
 
@@ -9,9 +10,9 @@ internal class PdfStreamViewModel : PdfCollapsableObjectViewModel
 
     public int DataLength => _model.EncodedLength;
 
-    public PdfStreamViewModel(PdfStream model) : base(model)
+    public PdfStreamViewModel(PdfObjectStore objectStore, PdfStream model) : base(model)
     {
         _model = model;
-        Dictionary = new PdfDictionaryViewModel(_model.Dictionary);
+        Dictionary = new PdfDictionaryViewModel(objectStore, _model.Dictionary);
     }
 }

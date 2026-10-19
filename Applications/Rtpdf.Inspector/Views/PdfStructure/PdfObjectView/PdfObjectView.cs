@@ -1,4 +1,5 @@
-﻿using ApplicationHelper.View.Helper;
+﻿using ApplicationHelper;
+using ApplicationHelper.View.Helper;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Data.Converters;
@@ -10,6 +11,7 @@ using Rtpdf.Inspector.ViewModels.PdfStructure;
 
 namespace Rtpdf.Inspector.Views.PdfStructure.PdfObjectView;
 
+[HotReloadTrigger]
 internal class PdfObjectView(PdfObjectViewModel viewModel)
 {
     private PdfObjectViewModel _viewModel = viewModel;
@@ -33,6 +35,7 @@ internal class PdfObjectView(PdfObjectViewModel viewModel)
             PdfArrayViewModel array => new PdfArrayView(array),
             PdfDictionaryViewModel dict => new PdfDictionaryView(dict),
             PdfStreamViewModel stream => new PdfStreamView(stream),
+            PdfIndirectReferenceViewModel indirectRef => new PdfIndirectReferenceView(indirectRef),
             _ => new PdfObjectView(viewModel),
         };
     }
@@ -80,6 +83,7 @@ internal class PdfObjectView(PdfObjectViewModel viewModel)
                 PdfDictionaryViewModel dict => $"Dictionary ({dict.Items.Count})",
                 PdfArrayViewModel array => $"Array ({array.Items.Count})",
                 PdfStreamViewModel stream => $"Stream ({stream.DataLength} bytes)",
+                PdfIndirectReferenceViewModel reference => $"Indirect Reference {reference.Reference}",
                 _ => "???",
             },
         }, 0, 1)
@@ -87,7 +91,13 @@ internal class PdfObjectView(PdfObjectViewModel viewModel)
         {
             VerticalAlignment = VerticalAlignment.Top,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            Content = PdfObjectView.CreateView(viewModel).Render(),
+            [!ContentControl.ContentProperty] = CompiledBinding.Create<PdfCollapsableObjectViewModel, bool>(
+                source: viewModel,
+                expression: vm => vm.IsExpanded,
+                converter: new FuncValueConverter<bool, Control?>(isExpanded =>
+                    isExpanded ? PdfObjectView.CreateView(viewModel).Render() : null
+                )
+            ),
             [!ContentControl.IsVisibleProperty] = CompiledBinding.Create<PdfCollapsableObjectViewModel, bool>(
                 source: viewModel,
                 expression: vm => vm.IsExpanded

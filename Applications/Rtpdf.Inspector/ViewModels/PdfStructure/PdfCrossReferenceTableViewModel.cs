@@ -48,7 +48,7 @@ internal partial class PdfCrossReferenceTableViewModel : ViewModelBase
             )
         );
 
-        SelectedIndirectObjectViewModel = new(indirectObject);
+        SelectedIndirectObjectViewModel = new(_model.ObjectStore, indirectObject);
 
         return;
     }

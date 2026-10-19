@@ -51,7 +51,7 @@ internal class PdfDocumentInfoViewModel
     public PdfDocumentInfoViewModel(PdfInspectionSession session, PdfDictionary model)
     {
         _model = model;
-        Dictionary = new(_model);
+        Dictionary = new(session.ObjectStore, _model);
 
         var objectStore = session.ObjectStore;
 

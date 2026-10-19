@@ -38,10 +38,19 @@ internal class PdfTrailerView(PdfTrailerViewModel viewModel)
             HorizontalAlignment = HorizontalAlignment.Stretch,
             TextAlignment = TextAlignment.Left,
             Margin = new(0, 16.0),
-            Text = $"ID: {_viewModel.ID ?? "未設定"}"
+            Text = "Raw Dictionary"
         });
 
-        return panel;
+        panel.Children.Add(
+            new PdfObjectView.PdfDictionaryView(_viewModel.RawDictionary).Render()
+            .With(view => view.Margin = new(16.0, 0.0, 0.0, 0.0))
+        );
+
+        return new ScrollViewer
+        {
+            Padding = new(0.0, 0.0, 16.0, 0.0),
+            Content = panel,
+        };
     }
 
     private Control CreateDocumentInfoView()

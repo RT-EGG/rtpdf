@@ -12,11 +12,13 @@ internal class PdfTrailerViewModel : ViewModelBase
 
     public PdfDocumentInfoViewModel? DocumentInfo { get; }
     public string? ID { get; }
+    public PdfDictionaryViewModel RawDictionary { get; }
 
     public PdfTrailerViewModel(PdfInspectionSession model)
     {
         _model = model;
         _trailer = _model.CrossReferences.Trailer;
+        RawDictionary = new PdfDictionaryViewModel(_model.ObjectStore, _trailer);
 
         if (_trailer.TryGetValueAs<PdfDictionary>("Info", _model.ObjectStore, true, out var infoDict))
         {
