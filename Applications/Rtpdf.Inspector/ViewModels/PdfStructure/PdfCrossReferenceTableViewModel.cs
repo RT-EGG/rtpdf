@@ -25,7 +25,8 @@ internal partial class PdfCrossReferenceTableViewModel : ViewModelBase
             Columns =
             {
                 new() { ID = "ObjectNo", Resizeable = false, Width = 100, },
-                new() { ID = "Offset/NextFree", Resizeable = false, Width = 120, },
+                new() { ID = "Offset/NextFree/ObjStm", Resizeable = false, Width = 170, },
+                new() { ID = "ObjStmIndex", Resizeable = false, Width = 100, },
                 new() { ID = "GenNo", Resizeable = false, Width = 80, },
                 new() { ID = "Kind", Resizeable = false, Width = 50, },
             },
@@ -35,7 +36,7 @@ internal partial class PdfCrossReferenceTableViewModel : ViewModelBase
 
     partial void OnSelectedItemChanged(ItemViewModel? value)
     {
-        if (value is null || value.ObjectNumber == 0)
+        if (value is null || value.ObjectNumber == 0 || value.Model.Kind != PdfObjectLocationKind.InUse)
         {
             SelectedIndirectObjectViewModel = null;
             return;
@@ -77,9 +78,12 @@ internal partial class PdfCrossReferenceTableViewModel : ViewModelBase
         {
             PdfObjectLocationKind.InUse => "n",
             PdfObjectLocationKind.Free => "f",
+            PdfObjectLocationKind.Compressed => "c",
             _ => "?",
         };
-        public long OffsetOrNextFree => (Model.ByteOffset ?? Model.NextFreeObjectNumber) ?? 0;
+        public long OffsetOrNextFree =>
+            (Model.ByteOffset ?? Model.NextFreeObjectNumber ?? Model.ObjectStreamNumber) ?? 0;
         public string OffsetOrNextFreeText => OffsetOrNextFree.ToString("D10");
+        public string ObjectStreamIndexText => Model.ObjectStreamIndex?.ToString() ?? "-";
     }
 }

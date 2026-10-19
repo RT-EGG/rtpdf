@@ -19,7 +19,7 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 | PDFヘッダーバージョン | 互換性の目安 | 制限 |
 | --- | :---: | --- |
 | PDF 1.0～1.4 | ⚠️ 部分対応 | 下記の実装済み構造だけを使用するファイル。各バージョンへの完全適合性は未検証 |
-| PDF 1.5～1.7 | ⚠️ 部分対応 | 従来形式のxref tableと非圧縮の間接オブジェクトを使用するファイルに限定 |
+| PDF 1.5～1.7 | ⚠️ 部分対応 | xref tableまたはxref streamと、object stream外の間接オブジェクトを使用するファイルに限定 |
 | PDF 2.0 | ⚠️ 未検証 | 古い構文だけのファイルを解析できる可能性はあるが、互換性は保証しない |
 
 ## 対応状況
@@ -37,7 +37,7 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 | PDF日時文字列 | ✅ | `D:YYYYMMDDHHmmSSOHH'mm'`。年以降の末尾フィールドとPDF 1.xの省略可能な`D:`に対応 |
 | 間接オブジェクト | ✅ | object番号・generation番号の検証、キャッシュ、参照チェーンと循環の検出 |
 | xref table・trailer | ✅ | 従来形式のxref tableを解析。incremental updateの`/Prev`チェーンをたどり、最新revisionを優先して統合 |
-| xref stream | ❌ | 未対応 |
+| xref stream | ⚠️ | PDF 1.5形式、`/W`・`/Index`、type 0/1/2、Flate圧縮、xref tableとの混在・`/XRefStm`に対応。Filter制限あり |
 | object stream | ❌ | 未対応 |
 | Catalog | ✅ | trailerの`/Root`からCatalogを読み込み、`/Type`と`/Pages`を検証 |
 | Page Tree | ✅ | 階層とページ順を読み込み、循環・重複・`/Parent`・`/Count`を検証 |
@@ -51,9 +51,15 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 
 ### Incremental Update
 
-`PdfCrossReferenceParser.Parse()`は、末尾の`startxref`から従来形式のxref tableを読み、trailerの`/Prev`をたどって過去のrevisionを統合します。同じobject番号が複数のrevisionにある場合は最新のentryが優先されるため、更新されたobjectだけでなく、最新revisionでfreeになったobjectも反映されます。統合後のentryは`PdfCrossReferenceTable.Entries`、物理的な各revisionは新しい順に`PdfCrossReferenceTable.Sections`から参照できます。
+`PdfCrossReferenceParser.Parse()`は、末尾の`startxref`からxref tableまたはxref streamを読み、`/Prev`をたどって過去のrevisionを統合します。同じobject番号が複数のrevisionにある場合は最新のentryが優先されるため、更新されたobjectだけでなく、最新revisionでfreeになったobjectも反映されます。統合後のentryは`PdfCrossReferenceTable.Entries`、物理的な各xref table・streamは新しい順に`PdfCrossReferenceTable.Sections`から参照できます。
 
-対象は従来形式のxref tableを使ったincremental updateの**読み込み**です。xref stream、hybrid-reference fileの`/XRefStm`、object stream、incremental updateの書き込み・保存には対応していません。`/Prev`の循環、設定された最大revision数・最大entry数、最新trailerの`/Size`と統合結果の不整合は`PdfCrossReferenceException`になります。
+対象はxref tableまたはxref streamを使ったincremental updateの**読み込み**です。両形式がrevision間で混在するファイルと、同一revisionで`/XRefStm`を使うhybrid-reference fileにも対応します。object streamとincremental updateの書き込み・保存には対応していません。`/Prev`の循環、設定された最大revision数・最大entry数、最新trailerの`/Size`と統合結果の不整合は`PdfCrossReferenceException`になります。
+
+### xref stream
+
+`PdfCrossReferenceParser`は、`startxref`が従来形式のxref tableまたはxref streamのどちらを指しているかを判別します。xref streamの`/W`は各fieldが0～8 bytes、`/Index`は非重複かつobject番号が昇順の範囲に対応します。`/Index`省略時は`[0 /Size]`として扱います。entry type 0（free）、type 1（ファイル内offset）、type 2（object stream番号とindex）を保持し、未知のtypeは将来拡張との互換性のため未登録entryとして扱います。
+
+stream dataは無Filterまたは`/FlateDecode`を読み込めます。複数Filter、未対応Filter、FlateのPredictorなどの範囲は後述の「StreamとFilterの対応」と同じです。type 2 entryの位置情報は`PdfObjectLocation.ObjectStreamNumber`と`ObjectStreamIndex`から参照できますが、object stream内のobject解決はまだ未対応で、`PdfObjectStore`は`PdfObjectResolutionException`を返します。
 
 ### PDF日時文字列
 

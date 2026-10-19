@@ -6,7 +6,7 @@ using Rtpdf.Core.Tokens;
 namespace Rtpdf.Core.Parsing;
 
 /// <summary>
-/// Parses conventional <c>xref</c> tables and trailer dictionaries.
+/// Parses conventional cross-reference tables and PDF 1.5 cross-reference streams.
 /// </summary>
 public sealed class PdfCrossReferenceParser
 {
@@ -32,7 +32,7 @@ public sealed class PdfCrossReferenceParser
     }
 
     /// <summary>
-    /// Locates the final <c>startxref</c>, follows the conventional <c>/Prev</c> chain, and
+    /// Locates the final <c>startxref</c>, follows the <c>/Prev</c> chain, and
     /// returns the effective table with newer entries overriding older entries.
     /// </summary>
     public PdfCrossReferenceTable Parse()
@@ -46,21 +46,33 @@ public sealed class PdfCrossReferenceParser
 
         while (true)
         {
-            if (!visitedOffsets.Add(crossReferenceOffset))
-            {
-                throw Error("Circular trailer /Prev chain detected", ClampOffset(crossReferenceOffset));
-            }
+            var section = ParseAndMergeSection(
+                crossReferenceOffset,
+                startXrefKeywordOffset,
+                sections,
+                visitedOffsets,
+                effectiveEntries);
 
-            if (sections.Count >= _options.MaximumCrossReferenceSections)
+            if (section.Kind == PdfCrossReferenceSectionKind.ConventionalTable &&
+                GetCrossReferenceStreamOffset(section) is long streamOffset)
             {
-                throw Error(
-                    $"Cross-reference chain exceeds the configured limit of {_options.MaximumCrossReferenceSections} sections",
-                    ClampOffset(crossReferenceOffset));
-            }
+                var streamSection = ParseAndMergeSection(
+                    streamOffset,
+                    -1,
+                    sections,
+                    visitedOffsets,
+                    effectiveEntries);
+                if (streamSection.Kind != PdfCrossReferenceSectionKind.Stream)
+                {
+                    throw Error("Trailer /XRefStm must point to an xref stream", ClampOffset(streamOffset));
+                }
 
-            var section = ParseSectionAtCore(crossReferenceOffset, startXrefKeywordOffset);
-            sections.Add(section);
-            MergeEffectiveEntries(section, effectiveEntries);
+                ValidateCrossReferenceStreamEntry(streamSection, section);
+            }
+            else if (section.Kind == PdfCrossReferenceSectionKind.Stream)
+            {
+                ValidateCrossReferenceStreamEntry(section, companionTable: null);
+            }
 
             if (section.PreviousCrossReferenceOffset is not long previousOffset)
             {
@@ -75,7 +87,7 @@ public sealed class PdfCrossReferenceParser
         return new PdfCrossReferenceTable(sections, effectiveEntries);
     }
 
-    /// <summary>Parses a conventional table at a known byte offset.</summary>
+    /// <summary>Parses one cross-reference table or stream at a known byte offset.</summary>
     public PdfCrossReferenceTable ParseAt(long crossReferenceOffset)
     {
         var section = ParseSectionAtCore(crossReferenceOffset, -1);
@@ -92,6 +104,12 @@ public sealed class PdfCrossReferenceParser
         }
 
         _position = (int)crossReferenceOffset;
+        if (!MatchesKeyword("xref"u8))
+        {
+            return new PdfCrossReferenceStreamParser(_input, _options)
+                .ParseAt(crossReferenceOffset, startXrefKeywordOffset);
+        }
+
         ExpectKeyword("xref"u8, "Expected a conventional xref table");
 
         var entries = new SortedDictionary<int, PdfObjectLocation>();
@@ -146,6 +164,63 @@ public sealed class PdfCrossReferenceParser
             declaredSize,
             entries,
             trailer);
+    }
+
+    private PdfCrossReferenceSection ParseAndMergeSection(
+        long crossReferenceOffset,
+        int startXrefKeywordOffset,
+        List<PdfCrossReferenceSection> sections,
+        HashSet<long> visitedOffsets,
+        SortedDictionary<int, PdfObjectLocation> effectiveEntries)
+    {
+        if (!visitedOffsets.Add(crossReferenceOffset))
+        {
+            throw Error("Circular cross-reference chain detected", ClampOffset(crossReferenceOffset));
+        }
+
+        if (sections.Count >= _options.MaximumCrossReferenceSections)
+        {
+            throw Error(
+                $"Cross-reference chain exceeds the configured limit of {_options.MaximumCrossReferenceSections} sections",
+                ClampOffset(crossReferenceOffset));
+        }
+
+        var section = ParseSectionAtCore(crossReferenceOffset, startXrefKeywordOffset);
+        sections.Add(section);
+        MergeEffectiveEntries(section, effectiveEntries);
+        return section;
+    }
+
+    private static long? GetCrossReferenceStreamOffset(PdfCrossReferenceSection section) =>
+        section.Trailer.TryGetValue("XRefStm", out var value) && value is PdfInteger integer
+            ? integer.Value
+            : null;
+
+    private void ValidateCrossReferenceStreamEntry(
+        PdfCrossReferenceSection streamSection,
+        PdfCrossReferenceSection? companionTable)
+    {
+        var objectId = streamSection.CrossReferenceStreamObjectId!.Value;
+        PdfObjectLocation? location = null;
+        if (companionTable is not null &&
+            companionTable.TryGetLocation(objectId.ObjectNumber, out var tableLocation))
+        {
+            location = tableLocation;
+        }
+        else if (streamSection.TryGetLocation(objectId.ObjectNumber, out var streamLocation))
+        {
+            location = streamLocation;
+        }
+
+        if (location is null ||
+            location.Kind != PdfObjectLocationKind.InUse ||
+            location.ByteOffset != streamSection.CrossReferenceOffset ||
+            location.GenerationNumber != objectId.GenerationNumber)
+        {
+            throw Error(
+                "An xref stream must have a matching in-use cross-reference entry",
+                ClampOffset(streamSection.CrossReferenceOffset));
+        }
     }
 
     private void MergeEffectiveEntries(
@@ -280,6 +355,20 @@ public sealed class PdfCrossReferenceParser
             if (previousInteger.Value == crossReferenceOffset)
             {
                 throw Error("Trailer /Prev must not reference the current xref table", trailerOffset);
+            }
+        }
+
+        if (trailer.TryGetValue("XRefStm", out var streamObject))
+        {
+            if (streamObject is not PdfInteger streamInteger ||
+                streamInteger.Value < 0 || streamInteger.Value >= _input.Length)
+            {
+                throw Error("Trailer /XRefStm must be a valid byte offset", trailerOffset);
+            }
+
+            if (streamInteger.Value == crossReferenceOffset)
+            {
+                throw Error("Trailer /XRefStm must not reference the current xref table", trailerOffset);
             }
         }
 
