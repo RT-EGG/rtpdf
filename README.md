@@ -34,6 +34,7 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 | --- | :---: | --- |
 | PDFオブジェクトモデル | ✅ | null、真偽値、整数、実数、Name、Literal/Hex String、Array、Dictionary、Stream、間接参照 |
 | Lexer・直接オブジェクトParser | ✅ | 対応済みオブジェクトの字句解析と構文解析 |
+| PDF日時文字列 | ✅ | `D:YYYYMMDDHHmmSSOHH'mm'`。年以降の末尾フィールドとPDF 1.xの省略可能な`D:`に対応 |
 | 間接オブジェクト | ✅ | object番号・generation番号の検証、キャッシュ、参照チェーンと循環の検出 |
 | xref table・trailer | ⚠️ | 従来形式のxref tableを解析。最終xrefの`/Prev`値は保持するが、incremental updateのxrefチェーン統合は未対応 |
 | xref stream | ❌ | 未対応 |
@@ -47,6 +48,23 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 | 暗号化PDF | ❌ | Security Handler未対応 |
 | Writer・保存 | ❌ | 新規保存、完全保存、incremental updateのいずれも未対応 |
 | 描画・レンダリング | ❌ | 対象外。将来は別レイヤーとして検討 |
+
+### PDF日時文字列
+
+`PdfDateParser.TryParse`は、PDFへ記録されたローカル日時を`DateTimeKind.Unspecified`の`DateTime`として返します。UTCオフセットは`DateTime`に保持できないため、必要な場合は3引数overloadで`TimeSpan?`として別途取得できます。タイムゾーンが省略された場合のoffsetはnull、`Z`の場合は`TimeSpan.Zero`です。
+
+```csharp
+if (PdfDateParser.TryParse(
+    "D:20261019153045+09'00'",
+    out var localDateTime,
+    out var utcOffset))
+{
+    // localDateTime: 2026-10-19 15:30:45 (Kind = Unspecified)
+    // utcOffset:    +09:00
+}
+```
+
+月・日を省略した場合は`01`、時・分・秒を省略した場合は`00`を使用します。不正な暦日、途中のフィールドだけを飛ばした形式、仕様どおりのapostropheを持たないUTC offsetはfalseになります。
 
 ## StreamとFilterの対応
 
