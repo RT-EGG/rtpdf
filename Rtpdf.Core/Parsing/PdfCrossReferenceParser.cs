@@ -31,17 +31,60 @@ public sealed class PdfCrossReferenceParser
         _options.Validate();
     }
 
-    /// <summary>Locates the final <c>startxref</c> declaration and parses its table.</summary>
+    /// <summary>
+    /// Locates the final <c>startxref</c>, follows the conventional <c>/Prev</c> chain, and
+    /// returns the effective table with newer entries overriding older entries.
+    /// </summary>
     public PdfCrossReferenceTable Parse()
     {
         var startXref = FindStartXref();
-        return ParseAtCore(startXref.CrossReferenceOffset, startXref.KeywordOffset);
+        var sections = new List<PdfCrossReferenceSection>();
+        var visitedOffsets = new HashSet<long>();
+        var effectiveEntries = new SortedDictionary<int, PdfObjectLocation>();
+        var crossReferenceOffset = startXref.CrossReferenceOffset;
+        var startXrefKeywordOffset = startXref.KeywordOffset;
+
+        while (true)
+        {
+            if (!visitedOffsets.Add(crossReferenceOffset))
+            {
+                throw Error("Circular trailer /Prev chain detected", ClampOffset(crossReferenceOffset));
+            }
+
+            if (sections.Count >= _options.MaximumCrossReferenceSections)
+            {
+                throw Error(
+                    $"Cross-reference chain exceeds the configured limit of {_options.MaximumCrossReferenceSections} sections",
+                    ClampOffset(crossReferenceOffset));
+            }
+
+            var section = ParseSectionAtCore(crossReferenceOffset, startXrefKeywordOffset);
+            sections.Add(section);
+            MergeEffectiveEntries(section, effectiveEntries);
+
+            if (section.PreviousCrossReferenceOffset is not long previousOffset)
+            {
+                break;
+            }
+
+            crossReferenceOffset = previousOffset;
+            startXrefKeywordOffset = -1;
+        }
+
+        ValidateEffectiveTable(sections[0], effectiveEntries);
+        return new PdfCrossReferenceTable(sections, effectiveEntries);
     }
 
     /// <summary>Parses a conventional table at a known byte offset.</summary>
-    public PdfCrossReferenceTable ParseAt(long crossReferenceOffset) => ParseAtCore(crossReferenceOffset, -1);
+    public PdfCrossReferenceTable ParseAt(long crossReferenceOffset)
+    {
+        var section = ParseSectionAtCore(crossReferenceOffset, -1);
+        var entries = new SortedDictionary<int, PdfObjectLocation>();
+        MergeEffectiveEntries(section, entries);
+        return new PdfCrossReferenceTable([section], entries);
+    }
 
-    private PdfCrossReferenceTable ParseAtCore(long crossReferenceOffset, int startXrefKeywordOffset)
+    private PdfCrossReferenceSection ParseSectionAtCore(long crossReferenceOffset, int startXrefKeywordOffset)
     {
         if (crossReferenceOffset < 0 || crossReferenceOffset >= _input.Length)
         {
@@ -96,13 +139,47 @@ public sealed class PdfCrossReferenceParser
         var trailer = ParseTrailer(trailerOffset);
         var declaredSize = ValidateTrailer(trailer, entries, trailerOffset, crossReferenceOffset);
 
-        return new PdfCrossReferenceTable(
+        return new PdfCrossReferenceSection(
             crossReferenceOffset,
             startXrefKeywordOffset,
             trailerKeywordOffset,
             declaredSize,
             entries,
             trailer);
+    }
+
+    private void MergeEffectiveEntries(
+        PdfCrossReferenceSection section,
+        SortedDictionary<int, PdfObjectLocation> effectiveEntries)
+    {
+        foreach (var entry in section.Entries)
+        {
+            if (effectiveEntries.ContainsKey(entry.ObjectNumber))
+            {
+                continue;
+            }
+
+            if (effectiveEntries.Count >= _options.MaximumEntries)
+            {
+                throw Error(
+                    $"Effective xref table exceeds the configured limit of {_options.MaximumEntries} entries",
+                    ClampOffset(section.CrossReferenceOffset));
+            }
+
+            effectiveEntries.Add(entry.ObjectNumber, entry);
+        }
+    }
+
+    private void ValidateEffectiveTable(
+        PdfCrossReferenceSection newestSection,
+        SortedDictionary<int, PdfObjectLocation> effectiveEntries)
+    {
+        if (effectiveEntries.Count > 0 && effectiveEntries.Keys.Max() >= newestSection.DeclaredSize)
+        {
+            throw Error(
+                "The newest trailer /Size must be greater than every effective xref object number",
+                newestSection.TrailerOffset);
+        }
     }
 
     private PdfObjectLocation ReadEntry(int objectNumber)

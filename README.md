@@ -36,7 +36,7 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 | Lexer・直接オブジェクトParser | ✅ | 対応済みオブジェクトの字句解析と構文解析 |
 | PDF日時文字列 | ✅ | `D:YYYYMMDDHHmmSSOHH'mm'`。年以降の末尾フィールドとPDF 1.xの省略可能な`D:`に対応 |
 | 間接オブジェクト | ✅ | object番号・generation番号の検証、キャッシュ、参照チェーンと循環の検出 |
-| xref table・trailer | ⚠️ | 従来形式のxref tableを解析。最終xrefの`/Prev`値は保持するが、incremental updateのxrefチェーン統合は未対応 |
+| xref table・trailer | ✅ | 従来形式のxref tableを解析。incremental updateの`/Prev`チェーンをたどり、最新revisionを優先して統合 |
 | xref stream | ❌ | 未対応 |
 | object stream | ❌ | 未対応 |
 | Catalog | ✅ | trailerの`/Root`からCatalogを読み込み、`/Type`と`/Pages`を検証 |
@@ -48,6 +48,12 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 | 暗号化PDF | ❌ | Security Handler未対応 |
 | Writer・保存 | ❌ | 新規保存、完全保存、incremental updateのいずれも未対応 |
 | 描画・レンダリング | ❌ | 対象外。将来は別レイヤーとして検討 |
+
+### Incremental Update
+
+`PdfCrossReferenceParser.Parse()`は、末尾の`startxref`から従来形式のxref tableを読み、trailerの`/Prev`をたどって過去のrevisionを統合します。同じobject番号が複数のrevisionにある場合は最新のentryが優先されるため、更新されたobjectだけでなく、最新revisionでfreeになったobjectも反映されます。統合後のentryは`PdfCrossReferenceTable.Entries`、物理的な各revisionは新しい順に`PdfCrossReferenceTable.Sections`から参照できます。
+
+対象は従来形式のxref tableを使ったincremental updateの**読み込み**です。xref stream、hybrid-reference fileの`/XRefStm`、object stream、incremental updateの書き込み・保存には対応していません。`/Prev`の循環、設定された最大revision数・最大entry数、最新trailerの`/Size`と統合結果の不整合は`PdfCrossReferenceException`になります。
 
 ### PDF日時文字列
 
