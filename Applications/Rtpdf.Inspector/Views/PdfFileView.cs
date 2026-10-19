@@ -1,5 +1,6 @@
 ﻿using ApplicationHelper;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Layout;
 using Rtpdf.Inspector.ViewModels;
 using Rtpdf.Inspector.Views.PdfStructure;
@@ -19,6 +20,11 @@ internal class PdfFileView(PdfFileViewModel viewModel)
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalContentAlignment = VerticalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            [!TabControl.SelectedIndexProperty] = CompiledBinding.Create<PdfFileViewModel, int>(
+                source: _viewModel,
+                expression: vm => vm.CurrentIndex,
+                mode: BindingMode.TwoWay
+            )
         };
 
         tabControl.Items.Add(new TabItem
@@ -29,6 +35,16 @@ internal class PdfFileView(PdfFileViewModel viewModel)
                 FontSize = 16,
             },
             Content = new PdfCrossReferenceTableView(_viewModel.CrossReferenceTableViewModel).Render()
+        });
+
+        tabControl.Items.Add(new TabItem
+        {
+            Header = new TextBlock
+            {
+                Text = "Trailer",
+                FontSize = 16,
+            },
+            Content = new PdfTrailerView(_viewModel.TrailerViewModel).Render()
         });
 
         return tabControl;

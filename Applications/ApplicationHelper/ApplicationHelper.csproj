@@ -15,4 +15,8 @@
     <PackageReference Include="System.Reactive" Version="7.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\Rtpdf.Core\Rtpdf.Core.csproj" />
+  </ItemGroup>
+
 </Project>

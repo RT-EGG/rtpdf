@@ -3,6 +3,7 @@ using Rtpdf.Core.Diagnostics;
 using Rtpdf.Core.Objects;
 using Rtpdf.Core.Parsing;
 using Rtpdf.Core.Tokens;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Rtpdf.Core.Storage;
 
@@ -66,6 +67,20 @@ public sealed class PdfObjectStore
         lock (_syncRoot)
         {
             return GetIndirectObjectCore(objectId);
+        }
+    }
+
+    public bool TryGetIndirectObject(PdfObjectId objectId, [NotNullWhen(true)] out PdfIndirectObject? outObject)
+    {
+        try
+        {
+            outObject = GetIndirectObject(objectId);
+            return true;
+        }
+        catch (PdfObjectResolutionException)
+        {
+            outObject = null;
+            return false;
         }
     }
 
