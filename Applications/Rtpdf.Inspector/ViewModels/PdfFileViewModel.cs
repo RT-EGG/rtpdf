@@ -13,6 +13,6 @@ internal partial class PdfFileViewModel : ObservableObject
     {
         _model = model;
 
-        CrossReferenceTableViewModel = new PdfCrossReferenceTableViewModel(_model.CrossReferences);
+        CrossReferenceTableViewModel = new PdfCrossReferenceTableViewModel(_model);
     }
 }

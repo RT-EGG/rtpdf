@@ -197,7 +197,9 @@ public class ColumnedListBox<VM, Column, Item> : ColumnedListBoxBase
             ),
             [ScrollViewer.HorizontalScrollBarVisibilityProperty] = ScrollBarVisibility.Auto,
             [ScrollViewer.VerticalScrollBarVisibilityProperty] = ScrollBarVisibility.Auto,
-            [!ListBox.SelectionModeProperty] = this[!SelectionModeProperty]
+            [!ListBox.SelectionModeProperty] = this[!SelectionModeProperty],
+            [!ListBox.SelectedItemProperty] = this[!!SelectedItemProperty],
+            [!ListBox.SelectedItemsProperty] = this[!!SelectedItemsProperty],
         }.WithStyle(new Style(selector => selector.OfType<ListBoxItem>())
         {
             Setters =

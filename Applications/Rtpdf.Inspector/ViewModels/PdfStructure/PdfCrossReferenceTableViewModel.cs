@@ -1,15 +1,23 @@
 ﻿using ApplicationHelper.ViewModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Rtpdf.Core.CrossReferences;
+using Rtpdf.Core.Objects;
+using Rtpdf.Inspector.Models;
 using System.Linq;
 
 namespace Rtpdf.Inspector.ViewModels.PdfStructure;
 
-internal class PdfCrossReferenceTableViewModel : ViewModelBase
+internal partial class PdfCrossReferenceTableViewModel : ViewModelBase
 {
-    private readonly PdfCrossReferenceTable _model;
+    private readonly PdfInspectionSession _model;
     public ListBoxViewModel ListBox { get; }
 
-    public PdfCrossReferenceTableViewModel(PdfCrossReferenceTable model)
+    [ObservableProperty]
+    public partial ItemViewModel? SelectedItem { get; set; } = null;
+    [ObservableProperty]
+    public partial PdfIndirectObjectViewModel? SelectedIndirectObjectViewModel { get; set; } = null;
+
+    public PdfCrossReferenceTableViewModel(PdfInspectionSession model)
     {
         _model = model;
         ListBox = new ListBoxViewModel()
@@ -21,8 +29,28 @@ internal class PdfCrossReferenceTableViewModel : ViewModelBase
                 new() { ID = "GenNo", Resizeable = false, Width = 80, },
                 new() { ID = "Kind", Resizeable = false, Width = 50, },
             },
-            Items = [.. _model.Entries.Select(entry => new ItemViewModel(entry))],
+            Items = [.. _model.CrossReferences.Entries.Select(entry => new ItemViewModel(entry))],
         };
+    }
+
+    partial void OnSelectedItemChanged(ItemViewModel? value)
+    {
+        if (value is null || value.ObjectNumber == 0)
+        {
+            SelectedIndirectObjectViewModel = null;
+            return;
+        }
+
+        var indirectObject = _model.ObjectStore.GetIndirectObject(
+            new PdfObjectId(
+                value.Model.ObjectNumber,
+                value.Model.GenerationNumber
+            )
+        );
+
+        SelectedIndirectObjectViewModel = new(indirectObject);
+
+        return;
     }
 
     public class ListBoxViewModel : ColumnedListBoxViewModel<ColumnViewModel, ItemViewModel>
@@ -35,20 +63,23 @@ internal class PdfCrossReferenceTableViewModel : ViewModelBase
 
     public class ItemViewModel
     {
-        private PdfObjectLocation _model;
+        public PdfObjectLocation Model;
         public ItemViewModel(PdfObjectLocation model)
         {
-            _model = model;
+            Model = model;
         }
 
-        public string ObjectNumber => _model.ObjectNumber.ToString("D10");
-        public string GenerationNumber => _model.GenerationNumber.ToString("D5");
-        public string Kind => _model.Kind switch
+        public int ObjectNumber => Model.ObjectNumber;
+        public string ObjectNumberText => ObjectNumber.ToString("D10");
+        public int GenerationNumber => Model.GenerationNumber;
+        public string GenerationNumberText => GenerationNumber.ToString("D5");
+        public string Kind => Model.Kind switch
         {
             PdfObjectLocationKind.InUse => "n",
             PdfObjectLocationKind.Free => "f",
             _ => "?",
         };
-        public string OffsetOrNextFree => ((_model.ByteOffset ?? _model.NextFreeObjectNumber) ?? 0).ToString("D10");
+        public long OffsetOrNextFree => (Model.ByteOffset ?? Model.NextFreeObjectNumber) ?? 0;
+        public string OffsetOrNextFreeText => OffsetOrNextFree.ToString("D10");
     }
 }

@@ -1,6 +1,7 @@
 ﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using System.Collections;
 
 namespace ApplicationHelper.View;
 
@@ -30,6 +31,14 @@ public class ColumnedListBoxBase : ContentControl
             nameof(SelectionMode),
             SelectionMode.Single);
 
+    public static readonly StyledProperty<object?> SelectedItemProperty =
+        AvaloniaProperty.Register<ColumnedListBoxBase, object?>(
+            nameof(SelectedItem));
+
+    public static readonly StyledProperty<IList?> SelectedItemsProperty =
+        AvaloniaProperty.Register<ColumnedListBoxBase, IList?>(
+            nameof(SelectedItems));
+
     public IBrush? HeaderSeparatorBrush
     {
         get => GetValue(HeaderSeparatorBrushProperty);
@@ -58,5 +67,17 @@ public class ColumnedListBoxBase : ContentControl
     {
         get => GetValue(SelectionModeProperty);
         set => SetValue(SelectionModeProperty, value);
+    }
+
+    public object? SelectedItem
+    {
+        get => GetValue(SelectedItemProperty);
+        set => SetValue(SelectedItemProperty, value);
+    }
+
+    public IList? SelectedItems
+    {
+        get => GetValue(SelectedItemsProperty);
+        set => SetValue(SelectedItemsProperty, value);
     }
 }

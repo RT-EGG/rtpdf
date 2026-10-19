@@ -34,8 +34,8 @@ sealed class Program
         var window = new MainView(viewModel)
         {
             Title = "Inspector",
-            Width = 600,
-            Height = 400,
+            Width = 800,
+            Height = 600,
         };
 
         DialogBase.SetMainWindow(window);
