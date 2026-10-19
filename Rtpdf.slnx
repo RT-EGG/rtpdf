@@ -1,4 +1,8 @@
 <Solution>
-  <Project Path="Rtpdf.Core/Rtpdf.Core.csproj" />
+  <Folder Name="/Applications/">
+    <Project Path="Applications/ApplicationHelper/ApplicationHelper.csproj" Id="b136d140-4fd2-450b-b652-c3f9ec2370cc" />
+    <Project Path="Applications/Rtpdf.Inspector/Rtpdf.Inspector.csproj" Id="14a37f90-6749-4117-9e60-323cd5baef8d" />
+  </Folder>
   <Project Path="Rtpdf.Core.Tests/Rtpdf.Core.Tests.csproj" />
+  <Project Path="Rtpdf.Core/Rtpdf.Core.csproj" />
 </Solution>
