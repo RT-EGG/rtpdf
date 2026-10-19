@@ -3,53 +3,54 @@ using Rtpdf.Core.Objects;
 namespace Rtpdf.Core.CrossReferences;
 
 /// <summary>
-/// A conventional PDF cross-reference section and its trailer dictionary.
+/// The effective conventional cross-reference table obtained from one or more PDF revisions.
 /// </summary>
 public sealed class PdfCrossReferenceTable
 {
     private readonly SortedDictionary<int, PdfObjectLocation> _entries;
 
     internal PdfCrossReferenceTable(
-        long crossReferenceOffset,
-        int startXrefKeywordOffset,
-        int trailerOffset,
-        int declaredSize,
-        SortedDictionary<int, PdfObjectLocation> entries,
-        PdfDictionary trailer)
+        IReadOnlyList<PdfCrossReferenceSection> sections,
+        SortedDictionary<int, PdfObjectLocation> entries)
     {
-        CrossReferenceOffset = crossReferenceOffset;
-        StartXrefKeywordOffset = startXrefKeywordOffset;
-        TrailerOffset = trailerOffset;
-        DeclaredSize = declaredSize;
-        _entries = entries;
-        Trailer = trailer;
+        if (sections.Count == 0)
+        {
+            throw new ArgumentException("At least one cross-reference section is required.", nameof(sections));
+        }
 
-        PreviousCrossReferenceOffset = trailer.TryGetValue("Prev", out var previous) &&
-            previous is PdfInteger previousInteger
-                ? previousInteger.Value
-                : null;
+        Sections = Array.AsReadOnly(sections.ToArray());
+        _entries = entries;
     }
 
-    public long CrossReferenceOffset { get; }
+    /// <summary>Gets physical sections in newest-to-oldest revision order.</summary>
+    public IReadOnlyList<PdfCrossReferenceSection> Sections { get; }
+
+    /// <summary>Gets the byte offset of the newest cross-reference section.</summary>
+    public long CrossReferenceOffset => Sections[0].CrossReferenceOffset;
 
     /// <summary>
-    /// Gets the offset of the <c>startxref</c> keyword, or -1 when parsed directly with
+    /// Gets the offset of the newest <c>startxref</c> keyword, or -1 when parsed directly with
     /// <see cref="Rtpdf.Core.Parsing.PdfCrossReferenceParser.ParseAt(long)"/>.
     /// </summary>
-    public int StartXrefKeywordOffset { get; }
+    public int StartXrefKeywordOffset => Sections[0].StartXrefKeywordOffset;
 
-    /// <summary>Gets the byte offset of the <c>trailer</c> keyword.</summary>
-    public int TrailerOffset { get; }
+    /// <summary>Gets the byte offset of the newest <c>trailer</c> keyword.</summary>
+    public int TrailerOffset => Sections[0].TrailerOffset;
 
-    public int DeclaredSize { get; }
+    /// <summary>Gets the <c>/Size</c> value from the newest trailer.</summary>
+    public int DeclaredSize => Sections[0].DeclaredSize;
 
+    /// <summary>Gets the number of effective entries after newer revisions override older ones.</summary>
     public int Count => _entries.Count;
 
+    /// <summary>Gets effective entries in object-number order.</summary>
     public IReadOnlyCollection<PdfObjectLocation> Entries => _entries.Values;
 
-    public PdfDictionary Trailer { get; }
+    /// <summary>Gets the newest trailer dictionary.</summary>
+    public PdfDictionary Trailer => Sections[0].Trailer;
 
-    public long? PreviousCrossReferenceOffset { get; }
+    /// <summary>Gets the <c>/Prev</c> value from the newest trailer, if present.</summary>
+    public long? PreviousCrossReferenceOffset => Sections[0].PreviousCrossReferenceOffset;
 
     public PdfObjectLocation this[int objectNumber] => _entries[objectNumber];
 
