@@ -1,4 +1,5 @@
 using System.Text;
+using Rtpdf.Core.Text;
 
 namespace Rtpdf.Core.Objects;
 
@@ -22,8 +23,9 @@ public sealed class PdfString : PdfObject, IEquatable<PdfString>
     public override PdfObjectType Type => PdfObjectType.String;
 
     /// <summary>
-    /// Decodes a byte-order-marked UTF-16 string. Other strings are exposed as
-    /// Latin-1 so that every source byte is preserved one-to-one.
+    /// Decodes a byte-order-marked UTF-16 string. Other strings use PDFDocEncoding.
+    /// Undefined PDFDocEncoding bytes are represented by U+FFFD while the original
+    /// bytes remain available through <see cref="Bytes"/>.
     /// </summary>
     public string GetText()
     {
@@ -37,7 +39,7 @@ public sealed class PdfString : PdfObject, IEquatable<PdfString>
             return Encoding.Unicode.GetString(_bytes.AsSpan(2));
         }
 
-        return Encoding.Latin1.GetString(_bytes);
+        return PdfDocEncoding.Decode(_bytes);
     }
 
     public bool Equals(PdfString? other) =>

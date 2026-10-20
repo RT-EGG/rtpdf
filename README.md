@@ -32,7 +32,7 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 
 | 領域 | 状況 | 現在の範囲 |
 | --- | :---: | --- |
-| PDFオブジェクトモデル | ✅ | null、真偽値、整数、実数、Name、Literal/Hex String、Array、Dictionary、Stream、間接参照 |
+| PDFオブジェクトモデル | ✅ | null、真偽値、整数、実数、Name、Literal/Hex String、Array、Dictionary、Stream、間接参照。文字列はUTF-16 BOMとPDFDocEncodingをデコード |
 | Lexer・直接オブジェクトParser | ✅ | 対応済みオブジェクトの字句解析と構文解析 |
 | PDF日時文字列 | ✅ | `D:YYYYMMDDHHmmSSOHH'mm'`。年以降の末尾フィールドとPDF 1.xの省略可能な`D:`に対応 |
 | 間接オブジェクト | ✅ | object番号・generation番号の検証、キャッシュ、参照チェーンと循環の検出 |
@@ -83,6 +83,12 @@ if (PdfDateParser.TryParse(
 ```
 
 月・日を省略した場合は`01`、時・分・秒を省略した場合は`00`を使用します。不正な暦日、途中のフィールドだけを飛ばした形式、仕様どおりのapostropheを持たないUTC offsetはfalseになります。
+
+### PDF文字列のEncoding
+
+`PdfString.GetText()`は先頭にUTF-16 BOMがある場合はUTF-16BEまたはUTF-16LEとして、それ以外はPDFDocEncodingとしてデコードします。元のbyte列は`PdfString.Bytes`に保持されます。
+
+PDFDocEncodingで未定義の`0x7F`と`0x9F`は、`GetText()`および`PdfDocEncoding.Decode()`ではUnicode replacement character（`U+FFFD`）になります。未定義byteを受け入れたくない場合は`PdfDocEncoding.TryDecode()`を使用できます。現在は読み込み用のデコードのみを提供しており、PDFDocEncodingへのエンコードは未対応です。
 
 ## StreamとFilterの対応
 
