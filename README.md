@@ -92,7 +92,7 @@ if (PdfDateParser.TryParse(
 
 | Filter | 状況 | 備考 |
 | --- | :---: | --- |
-| `FlateDecode` | ⚠️ | zlib形式のDEFLATEを展開。Predictorには制限あり |
+| `FlateDecode` | ✅ | zlib形式のDEFLATEを展開。TIFF Predictor 2とPNG Predictor 10～15に対応 |
 | `ASCIIHexDecode` | ❌ | 未対応 |
 | `ASCII85Decode` | ❌ | 未対応 |
 | `LZWDecode` | ❌ | 未対応 |
@@ -112,10 +112,11 @@ if (PdfDateParser.TryParse(
 | `/Predictor` | 方式 | 状況 |
 | ---: | --- | :---: |
 | 省略または`1` | Predictorなし | ✅ |
-| `2` | TIFF Predictor | ❌ |
-| `10`～`15` | PNG Predictor | ❌ |
+| `2` | TIFF Predictor | ✅ |
+| `10`～`14` | 固定PNG Predictor（None、Sub、Up、Average、Paeth） | ✅ |
+| `15` | 行ごとに選択するPNG Predictor | ✅ |
 
-未対応Predictorはデータを誤って返さず、`PdfFilterException`を送出します。`Colors`、`BitsPerComponent`、`Columns`はPredictor実装と合わせて今後対応する予定です。
+`Colors`（既定値1）、`BitsPerComponent`（既定値8）、`Columns`（既定値1）を解釈します。`BitsPerComponent`は1、2、4、8、16に対応します。行の途中で終わるデータ、不正なPNG filter byte、範囲外または未対応のparameterは`PdfFilterException`になります。展開上限はPNGの行先頭filter byteを除いた最終データ長に適用しつつ、中間データにも算出した上限を適用します。
 
 ## 現在の主要な安全制限
 

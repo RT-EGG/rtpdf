@@ -17,7 +17,8 @@ public sealed class FlateDecodeFilter : IPdfFilter
         int maximumDecodedLength)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(maximumDecodedLength);
-        ValidateDecodeParameters(decodeParameters);
+        var predictor = FlatePredictor.Create(decodeParameters, Name);
+        var maximumInflatedLength = predictor.GetMaximumInflatedLength(maximumDecodedLength);
 
         try
         {
@@ -31,10 +32,10 @@ public sealed class FlateDecodeFilter : IPdfFilter
                 var read = inflater.Read(buffer);
                 if (read == 0)
                 {
-                    return output.ToArray();
+                    return predictor.Decode(output.ToArray(), maximumDecodedLength);
                 }
 
-                if (output.Length + read > maximumDecodedLength)
+                if (output.Length + read > maximumInflatedLength)
                 {
                     throw new PdfFilterException(
                         $"Decoded stream exceeds the configured limit of {maximumDecodedLength} bytes",
@@ -54,23 +55,4 @@ public sealed class FlateDecodeFilter : IPdfFilter
         }
     }
 
-    private void ValidateDecodeParameters(PdfDictionary? decodeParameters)
-    {
-        if (decodeParameters is null || !decodeParameters.TryGetValue("Predictor", out var predictor))
-        {
-            return;
-        }
-
-        if (predictor is not PdfInteger integer)
-        {
-            throw new PdfFilterException("/Predictor must be an integer", Name);
-        }
-
-        if (integer.Value != 1)
-        {
-            throw new PdfFilterException(
-                $"Predictor {integer.Value} is not supported yet",
-                Name);
-        }
-    }
 }
