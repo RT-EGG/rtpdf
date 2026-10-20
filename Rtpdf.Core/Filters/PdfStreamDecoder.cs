@@ -186,7 +186,14 @@ public sealed class PdfStreamDecoder
 
     private static Dictionary<string, IPdfFilter> CreateFilterRegistry()
     {
-        IPdfFilter[] filters = [new FlateDecodeFilter()];
+        IPdfFilter[] filters =
+        [
+            new FlateDecodeFilter(),
+            new LzwDecodeFilter(),
+            new AsciiHexDecodeFilter(),
+            new Ascii85DecodeFilter(),
+            new RunLengthDecodeFilter(),
+        ];
         return filters.ToDictionary(filter => filter.Name, StringComparer.Ordinal);
     }
 
