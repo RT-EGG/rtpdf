@@ -1,5 +1,6 @@
 using Rtpdf.Core.Filters;
 using Rtpdf.Core.Parsing;
+using Rtpdf.Core.Security;
 
 namespace Rtpdf.Core.Storage;
 
@@ -25,6 +26,9 @@ public sealed class PdfObjectStoreOptions
 
     /// <summary>Gets the limits used while decoding object streams.</summary>
     public PdfStreamDecoderOptions StreamDecoderOptions { get; init; } = new();
+
+    /// <summary>Gets an authenticated context used to decrypt indirect objects as they are loaded.</summary>
+    public PdfDecryptionContext? DecryptionContext { get; init; }
 
     internal void Validate()
     {

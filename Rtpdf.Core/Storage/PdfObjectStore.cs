@@ -3,6 +3,7 @@ using Rtpdf.Core.Diagnostics;
 using Rtpdf.Core.Filters;
 using Rtpdf.Core.Objects;
 using Rtpdf.Core.Parsing;
+using Rtpdf.Core.Security;
 using Rtpdf.Core.Tokens;
 using System.Diagnostics.CodeAnalysis;
 
@@ -32,6 +33,7 @@ public sealed class PdfObjectStore
         _crossReferences = crossReferences ?? throw new ArgumentNullException(nameof(crossReferences));
         _options = options ?? new PdfObjectStoreOptions();
         _options.Validate();
+        ValidateDecryptionContext();
         _parser = new PdfIndirectObjectParser(_options.ObjectParserOptions);
     }
 
@@ -48,6 +50,7 @@ public sealed class PdfObjectStore
         _crossReferences = crossReferences ?? throw new ArgumentNullException(nameof(crossReferences));
         _options = options ?? new PdfObjectStoreOptions();
         _options.Validate();
+        ValidateDecryptionContext();
         _parser = new PdfIndirectObjectParser(_options.ObjectParserOptions);
     }
 
@@ -233,6 +236,23 @@ public sealed class PdfObjectStore
                     $"Object declaration identifies {parsed.ObjectId} instead of the requested object",
                     objectId,
                     byteOffset);
+            }
+
+            if (_options.DecryptionContext is { } context &&
+                (context.EncryptionObjectId is null || objectId != context.EncryptionObjectId.Value))
+            {
+                try
+                {
+                    parsed.Value = context.DecryptObject(parsed.Value, objectId);
+                }
+                catch (PdfEncryptionException exception)
+                {
+                    throw new PdfObjectResolutionException(
+                        "Indirect object could not be decrypted",
+                        objectId,
+                        byteOffset,
+                        exception);
+                }
             }
 
             AddToObjectCache(parsed, byteOffset);
@@ -423,4 +443,24 @@ public sealed class PdfObjectStore
     }
 
     private PdfObject ResolveStreamLength(PdfIndirectReference reference) => Resolve(reference);
+
+    private void ValidateDecryptionContext()
+    {
+        if (_options.DecryptionContext is not { } context)
+        {
+            return;
+        }
+
+        if (!_crossReferences.Trailer.TryGetValue("Encrypt", out var encryption) ||
+            (encryption, context.EncryptionObjectId) switch
+            {
+                (PdfDictionary, null) => false,
+                (PdfIndirectReference reference, PdfObjectId id) when reference.ObjectId == id => false,
+                _ => true,
+            })
+        {
+            throw new PdfEncryptionException(
+                "The decryption context does not match the document encryption dictionary");
+        }
+    }
 }
