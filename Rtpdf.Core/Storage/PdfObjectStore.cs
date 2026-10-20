@@ -4,6 +4,7 @@ using Rtpdf.Core.Filters;
 using Rtpdf.Core.Objects;
 using Rtpdf.Core.Parsing;
 using Rtpdf.Core.Security;
+using Rtpdf.Core.IO;
 using Rtpdf.Core.Tokens;
 using System.Diagnostics.CodeAnalysis;
 
@@ -14,7 +15,9 @@ namespace Rtpdf.Core.Storage;
 /// </summary>
 public sealed class PdfObjectStore
 {
-    private readonly byte[] _input;
+    private readonly byte[]? _input;
+    private readonly PdfByteSource? _source;
+    private readonly long[] _sourceBoundaries;
     private readonly PdfCrossReferenceTable _crossReferences;
     private readonly PdfObjectStoreOptions _options;
     private readonly PdfIndirectObjectParser _parser;
@@ -34,6 +37,36 @@ public sealed class PdfObjectStore
         _options = options ?? new PdfObjectStoreOptions();
         _options.Validate();
         ValidateDecryptionContext();
+        _sourceBoundaries = CreateSourceBoundaries(_input.LongLength);
+        _parser = new PdfIndirectObjectParser(_options.ObjectParserOptions);
+    }
+
+    internal PdfObjectStore(
+        byte[] input,
+        PdfCrossReferenceTable crossReferences,
+        PdfObjectStoreOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        _input = input;
+        _crossReferences = crossReferences ?? throw new ArgumentNullException(nameof(crossReferences));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _options.Validate();
+        ValidateDecryptionContext();
+        _sourceBoundaries = CreateSourceBoundaries(_input.LongLength);
+        _parser = new PdfIndirectObjectParser(_options.ObjectParserOptions);
+    }
+
+    internal PdfObjectStore(
+        PdfByteSource source,
+        PdfCrossReferenceTable crossReferences,
+        PdfObjectStoreOptions options)
+    {
+        _source = source ?? throw new ArgumentNullException(nameof(source));
+        _crossReferences = crossReferences ?? throw new ArgumentNullException(nameof(crossReferences));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _options.Validate();
+        ValidateDecryptionContext();
+        _sourceBoundaries = CreateSourceBoundaries(source.Length);
         _parser = new PdfIndirectObjectParser(_options.ObjectParserOptions);
     }
 
@@ -51,6 +84,7 @@ public sealed class PdfObjectStore
         _options = options ?? new PdfObjectStoreOptions();
         _options.Validate();
         ValidateDecryptionContext();
+        _sourceBoundaries = CreateSourceBoundaries(_input.LongLength);
         _parser = new PdfIndirectObjectParser(_options.ObjectParserOptions);
     }
 
@@ -190,7 +224,8 @@ public sealed class PdfObjectStore
                 byteOffset);
         }
 
-        if (byteOffset < 0 || byteOffset >= _input.Length)
+        var sourceLength = _source?.Length ?? _input!.LongLength;
+        if (byteOffset < 0 || byteOffset >= sourceLength)
         {
             throw new PdfObjectResolutionException(
                 "Cross-reference entry points outside the object source",
@@ -211,7 +246,7 @@ public sealed class PdfObjectStore
             PdfIndirectObject parsed;
             try
             {
-                parsed = _parser.Parse(_input, (int)byteOffset, ResolveStreamLength);
+                parsed = ParseIndirectObject(objectId, byteOffset);
             }
             catch (Exception exception) when (exception is PdfParseException or PdfLexerException)
             {
@@ -443,6 +478,43 @@ public sealed class PdfObjectStore
     }
 
     private PdfObject ResolveStreamLength(PdfIndirectReference reference) => Resolve(reference);
+
+    private PdfIndirectObject ParseIndirectObject(PdfObjectId objectId, long byteOffset)
+    {
+        if (_input is not null)
+        {
+            return _parser.Parse(_input, checked((int)byteOffset), ResolveStreamLength);
+        }
+
+        var boundaryIndex = Array.BinarySearch(_sourceBoundaries, byteOffset);
+        boundaryIndex = boundaryIndex >= 0 ? boundaryIndex + 1 : ~boundaryIndex;
+        var endOffset = boundaryIndex < _sourceBoundaries.Length
+            ? _sourceBoundaries[boundaryIndex]
+            : _source!.Length;
+        var length = endOffset - byteOffset;
+        if (length <= 0 || length > _options.MaximumIndirectObjectLength || length > int.MaxValue)
+        {
+            throw new PdfObjectResolutionException(
+                $"Indirect object source range exceeds the configured limit of {_options.MaximumIndirectObjectLength} bytes",
+                objectId,
+                byteOffset);
+        }
+
+        var bytes = GC.AllocateUninitializedArray<byte>((int)length);
+        _source!.ReadExactly(byteOffset, bytes);
+        return _parser.Parse(bytes, 0, ResolveStreamLength);
+    }
+
+    private long[] CreateSourceBoundaries(long sourceLength) =>
+        _crossReferences.Entries
+            .Where(entry => entry.Kind == PdfObjectLocationKind.InUse && entry.ByteOffset is not null)
+            .Select(entry => entry.ByteOffset!.Value)
+            .Concat(_crossReferences.Sections.Select(section => section.CrossReferenceOffset))
+            .Append(sourceLength)
+            .Where(offset => offset >= 0 && offset <= sourceLength)
+            .Distinct()
+            .Order()
+            .ToArray();
 
     private void ValidateDecryptionContext()
     {

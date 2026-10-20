@@ -10,6 +10,27 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 - .NET 10
 - `Rtpdf.Core`は.NET BCL以外のPDFライブラリに依存しません
 
+## PDFを開く
+
+`PdfDocumentReader.Open(...)`はファイルパス、`Stream`、`ReadOnlyMemory<byte>`、`PdfByteSource`を受け取り、xref、ObjectStore、Catalog、StreamDecoderをまとめた`PdfDocument`を返します。
+
+```csharp
+using var document = PdfDocumentReader.Open("sample.pdf");
+
+foreach (var page in document.Catalog.PageTree.Pages)
+{
+    // page.Dictionary、page.MediaBoxなどを参照
+}
+```
+
+暗号化PDFには`new PdfDocumentReaderOptions { Password = "..." }`を渡します。パスワードを省略した場合は空のパスワードで認証します。
+
+`Stream` overloadは現在位置をPDFの先頭として扱います。seek可能なStreamは必要なobjectのoffsetへ移動して読み、`PdfDocument.Dispose()`時に閉じます。`leaveOpen: true`を指定するとDocumentを破棄した後も元のStreamを開いたままにします。seekできないStreamは、設定された上限まで一時ファイルへ退避してrandom accessします。
+
+`PdfByteSource`は長さとoffset指定読み込みを提供する入力抽象です。`FromMemory`、`FromStream`、`OpenFile`のfactoryに加え、派生型を実装して独自の入力元を渡せます。ObjectStoreはsource全体を保持せず、xref offsetから必要な間接objectの範囲だけを読み込み、解析結果をキャッシュします。`PdfByteSource`を直接渡した場合は呼び出し側がsourceの寿命を管理します。
+
+現時点ではxref parserだけが`Open`中にsource全体の一時bufferを使用します。このbufferはOpen完了後には保持されません。xrefの末尾探索とsection解析を完全なrandom accessへ移行する作業、および2 GiBを超えるsourceへの対応は未完了です。
+
 ## PDFバージョンの扱い
 
 現時点では、ファイル先頭の`%PDF-x.y`ヘッダーを解析してバージョン適合性を判定する機能はありません。テストでは主に`%PDF-1.7`の入力を使用していますが、これは「PDF 1.7の全機能に対応している」という意味ではありません。
@@ -32,6 +53,7 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 
 | 領域 | 状況 | 現在の範囲 |
 | --- | :---: | --- |
+| Document Reader・ByteSource | ⚠️ | ObjectStoreはoffset単位で遅延読み込み。xref parserはOpen時の一時全量bufferを使用 |
 | PDFオブジェクトモデル | ✅ | null、真偽値、整数、実数、Name、Literal/Hex String、Array、Dictionary、Stream、間接参照。文字列はUTF-16 BOMとPDFDocEncodingをデコード |
 | Lexer・直接オブジェクトParser | ✅ | 対応済みオブジェクトの字句解析と構文解析 |
 | PDF日時文字列 | ✅ | `D:YYYYMMDDHHmmSSOHH'mm'`。年以降の末尾フィールドとPDF 1.xの省略可能な`D:`に対応 |
@@ -174,6 +196,8 @@ StreamはFilter展開前に復号され、object streamは外側のStreamだけ�
 
 | 設定 | 既定値 | 対象 |
 | --- | ---: | --- |
+| `MaximumSourceLength` | 256 MiB | `PdfDocumentReader`が受け付けるsourceと非seekable Streamの一時ファイル |
+| `MaximumIndirectObjectLength` | 256 MiB | ByteSourceから一度に読み込む間接object範囲 |
 | `MaximumEncodedStreamLength` | 256 MiB | 読み込む圧縮済みStream |
 | `MaximumDecodedStreamLength` | 256 MiB | Filter展開後のStream。展開処理中にも検査 |
 | `MaximumFilterCount` | 16 | 1つのStreamへ適用するFilter数 |
