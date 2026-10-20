@@ -45,7 +45,7 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 | Stream境界 | ✅ | 直接・間接`/Length`に対応。データ中の`endstream`文字列には依存しない |
 | Stream Filter | ⚠️ | Flate、LZW、ASCIIHex、ASCII85、RunLengthに対応。画像Codec系は未対応 |
 | Content Streamの命令解析 | ⚠️ | 展開済みStreamから直接operandとoperatorを命令単位に解析。inline imageとoperator semanticsは未対応 |
-| 暗号化PDF | ❌ | Security Handler未対応 |
+| 暗号化PDF | ⚠️ | Standard Security Handler Revision 2～4、RC4、AES-128、user/owner passwordに対応 |
 | Writer・保存 | ❌ | 新規保存、完全保存、incremental updateのいずれも未対応 |
 | 描画・レンダリング | ❌ | 対象外。将来は別レイヤーとして検討 |
 
@@ -144,6 +144,30 @@ inline imageの`BI ... ID ... EI`は、画像データ中に現れる`EI`との�
 
 `LZWDecode`の`EarlyChange`は既定値1で、0も指定できます。0または1以外、EOD codeの欠落、未定義code、切り詰められたbit列は`PdfFilterException`になります。
 
+## 暗号化PDF
+
+`PdfEncryptionDetector`はtrailerの`/Encrypt`を検査し、認証を行わずにSecurity Handler、`/V`、`/R`、鍵長を返します。`PdfStandardSecurityHandler.Authenticate()`へ同じdocument data、xref table、passwordを渡すと、認証済み`PdfDecryptionContext`を作成できます。このcontextを`PdfObjectStoreOptions.DecryptionContext`へ設定すると、読み込まれるStringとStreamがobject番号・generation番号に対応する鍵で復号されます。
+
+```csharp
+var crossReferences = new PdfCrossReferenceParser(documentData).Parse();
+var encryption = PdfEncryptionDetector.Inspect(documentData, crossReferences);
+
+PdfDecryptionContext? decryption = encryption.IsEncrypted
+    ? PdfStandardSecurityHandler.Authenticate(documentData, crossReferences, password)
+    : null;
+
+var objectStore = new PdfObjectStore(
+    documentData,
+    crossReferences,
+    new PdfObjectStoreOptions { DecryptionContext = decryption });
+```
+
+Standard Security HandlerのRevision 2～4に対応し、Revision 2の40-bit RC4、Revision 3の40～128-bit RC4、Revision 4のCrypt FilterによるRC4またはAES-128（`V2`、`AESV2`、`Identity`）を扱います。user passwordとowner passwordを判別し、permission値は`PdfDecryptionContext.Permissions`から参照できます。permissionの強制、変更、暗号化して保存する機能はありません。
+
+StreamはFilter展開前に復号され、object streamは外側のStreamだけを復号します。暗号化辞書とxref streamは復号対象外です。`EncryptMetadata false`のMetadata Streamにも対応します。
+
+未対応範囲はRevision 5/6のAES-256、公開鍵Security Handler、明示的なStream `/Crypt` Filter、embedded-file専用Crypt Filter、暗号化PDFの書き出しです。Revision 2～4のpasswordはPDFDocEncodingへ変換し32 bytesへ切り詰めます。変換できない文字を含むpasswordは`PdfEncryptionException`になります。
+
 ## 現在の主要な安全制限
 
 信頼できないPDFによる過剰なメモリ消費や無限再帰を避けるため、各ParserとReaderには設定可能な上限があります。主な既定値は次のとおりです。
@@ -177,5 +201,6 @@ inline imageの`BI ... ID ... EI`は、画像データ中に現れる`EI`との�
 - Catalog/Page Treeの構造不正: `PdfDocumentStructureException`
 - Stream Filter・Predictorの未対応または展開失敗: `PdfFilterException`
 - Content Streamの構文不正または未対応inline image: `PdfContentStreamException`
+- 暗号化設定、password認証、復号の失敗: `PdfEncryptionException`
 
 機能を追加・変更した際は、このREADMEの対応表と制限事項も同じコミットで更新します。
