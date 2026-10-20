@@ -21,6 +21,14 @@ public sealed class PdfCrossReferenceParser
         _options.Validate();
     }
 
+    internal PdfCrossReferenceParser(byte[] input, PdfCrossReferenceParserOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        _input = input;
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _options.Validate();
+    }
+
     public PdfCrossReferenceParser(Stream input, PdfCrossReferenceParserOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(input);

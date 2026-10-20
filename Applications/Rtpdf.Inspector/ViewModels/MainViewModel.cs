@@ -1,8 +1,5 @@
 ﻿using ApplicationHelper.ViewModel;
 using Rtpdf.Core.Documents;
-using Rtpdf.Core.Filters;
-using Rtpdf.Core.Parsing;
-using Rtpdf.Core.Storage;
 using Rtpdf.Inspector.Models;
 using System;
 using System.IO;
@@ -14,39 +11,35 @@ internal partial class MainViewModel : ViewModelBase
 {
     public PdfFileViewModel? PdfFileViewModel { get; private set; }
 
-    public async Task LoadFromFileAsync(string filePath)
+    public Task LoadFromFileAsync(string filePath)
     {
-        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-        stream.Seek(0, SeekOrigin.Begin);
-        await LoadFromStreamAsync(stream);
+        Load(() => PdfDocumentReader.Open(filePath));
+        return Task.CompletedTask;
     }
 
-    public async Task LoadFromStreamAsync(Stream stream)
+    public Task LoadFromStreamAsync(Stream stream)
     {
+        Load(() => PdfDocumentReader.Open(stream, leaveOpen: true));
+        return Task.CompletedTask;
+    }
+
+    private void Load(Func<PdfDocument> open)
+    {
+        PdfInspectionSession? session = null;
         try
         {
-            using var reader = new BinaryReader(stream);
-            var source = reader.ReadBytes((int)stream.Length);
-
-            var xref = new PdfCrossReferenceParser(source).Parse();
-            var objectStore = new PdfObjectStore(source, xref);
-            var catalog = new PdfCatalogReader(xref, objectStore).Read();
-            var streamDecoder = new PdfStreamDecoder(objectStore);
-
-            PdfFileViewModel = new(
-                new PdfInspectionSession(
-                    source,
-                    xref,
-                    objectStore,
-                    catalog,
-                    streamDecoder
-                )
-            );
+            session = new PdfInspectionSession(open());
+            var next = new PdfFileViewModel(session);
+            session = null;
+            PdfFileViewModel?.Dispose();
+            PdfFileViewModel = next;
         }
         catch (Exception ex)
         {
+            session?.Dispose();
             // Handle exceptions (e.g., log the error, show a message to the user, etc.)
             Console.WriteLine($"Error loading PDF: {ex.Message}");
+            PdfFileViewModel?.Dispose();
             PdfFileViewModel = null;
         }
     }

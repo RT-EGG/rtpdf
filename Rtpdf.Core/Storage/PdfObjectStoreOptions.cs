@@ -9,6 +9,9 @@ namespace Rtpdf.Core.Storage;
 /// </summary>
 public sealed class PdfObjectStoreOptions
 {
+    /// <summary>Gets the maximum number of source bytes read for one indirect object.</summary>
+    public int MaximumIndirectObjectLength { get; init; } = 256 * 1024 * 1024;
+
     public int MaximumReferenceDepth { get; init; } = 100;
 
     public int MaximumCachedObjects { get; init; } = 100_000;
@@ -32,6 +35,7 @@ public sealed class PdfObjectStoreOptions
 
     internal void Validate()
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(MaximumIndirectObjectLength);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(MaximumReferenceDepth, 0);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(MaximumCachedObjects, 0);
         ArgumentOutOfRangeException.ThrowIfNegative(MaximumObjectsPerObjectStream);

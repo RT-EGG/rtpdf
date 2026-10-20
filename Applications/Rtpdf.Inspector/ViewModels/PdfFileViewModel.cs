@@ -1,10 +1,11 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using Rtpdf.Inspector.Models;
 using Rtpdf.Inspector.ViewModels.PdfStructure;
+using System;
 
 namespace Rtpdf.Inspector.ViewModels;
 
-internal partial class PdfFileViewModel : ObservableObject
+internal partial class PdfFileViewModel : ObservableObject, IDisposable
 {
     private readonly PdfInspectionSession _model;
     public PdfCrossReferenceTableViewModel CrossReferenceTableViewModel { get; }
@@ -20,4 +21,6 @@ internal partial class PdfFileViewModel : ObservableObject
         CrossReferenceTableViewModel = new PdfCrossReferenceTableViewModel(_model);
         TrailerViewModel = new PdfTrailerViewModel(_model);
     }
+
+    public void Dispose() => _model.Dispose();
 }
