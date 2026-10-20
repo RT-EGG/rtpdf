@@ -44,7 +44,7 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 | ページ継承属性 | ✅ | `MediaBox`、`CropBox`、`Resources`、`Rotate` |
 | Stream境界 | ✅ | 直接・間接`/Length`に対応。データ中の`endstream`文字列には依存しない |
 | Stream Filter | ⚠️ | `/FlateDecode`のみ。詳細は次節を参照 |
-| Content Streamの命令解析 | ❌ | Operatorやgraphics stateの解析は未対応 |
+| Content Streamの命令解析 | ⚠️ | 展開済みStreamから直接operandとoperatorを命令単位に解析。inline imageとoperator semanticsは未対応 |
 | 暗号化PDF | ❌ | Security Handler未対応 |
 | Writer・保存 | ❌ | 新規保存、完全保存、incremental updateのいずれも未対応 |
 | 描画・レンダリング | ❌ | 対象外。将来は別レイヤーとして検討 |
@@ -89,6 +89,24 @@ if (PdfDateParser.TryParse(
 `PdfString.GetText()`は先頭にUTF-16 BOMがある場合はUTF-16BEまたはUTF-16LEとして、それ以外はPDFDocEncodingとしてデコードします。元のbyte列は`PdfString.Bytes`に保持されます。
 
 PDFDocEncodingで未定義の`0x7F`と`0x9F`は、`GetText()`および`PdfDocEncoding.Decode()`ではUnicode replacement character（`U+FFFD`）になります。未定義byteを受け入れたくない場合は`PdfDocEncoding.TryDecode()`を使用できます。現在は読み込み用のデコードのみを提供しており、PDFDocEncodingへのエンコードは未対応です。
+
+### Content Stream Parser
+
+`PdfContentStreamParser`は、展開済みcontent streamを読み、operatorの直前に並ぶ直接オブジェクトを`PdfContentOperation.Operands`としてまとめます。標準operatorだけでなく拡張operatorも名前を保ったまま返します。operatorごとのoperand数・型の検証、graphics stateの更新、テキスト抽出や描画は行いません。
+
+```csharp
+var decoder = new PdfStreamDecoder(objectStore);
+var operations = new PdfContentStreamParser(contentStream, decoder).Parse();
+
+foreach (var operation in operations)
+{
+    Console.WriteLine($"{operation.Operator}: {operation.Operands.Count} operands");
+}
+```
+
+ArrayやDictionaryを含む直接オブジェクト、コメント、PDFの空白文字に対応します。複合operand内に現れる間接参照と、operatorを伴わず末尾に残ったoperandは`PdfContentStreamException`になります。content stream直下の`1 0 R`は、文法どおり2つの数値operandとoperator `R`として扱います。
+
+inline imageの`BI ... ID ... EI`は、画像データ中に現れる`EI`との境界判定が必要なため未対応です。`BI`、または単独の`ID`・`EI`を検出した場合は、別のoperatorとして誤って扱わず`PdfContentStreamException`で明示的に失敗します。
 
 ## StreamとFilterの対応
 
@@ -141,6 +159,9 @@ PDFDocEncodingで未定義の`0x7F`と`0x9F`は、`GetText()`および`PdfDocEnc
 | `MaximumPageTreeDepth` | 100 | Page Treeの深さ |
 | `MaximumPageTreeNodes` | 1,000,000 | Page Treeの要素数 |
 | `MaximumPages` | 1,000,000 | ページ数 |
+| `MaximumOperations` | 1,000,000 | 1つのContent Streamの命令数 |
+| `MaximumOperandsPerOperation` | 100,000 | 1つのContent Stream命令のoperand数 |
+| `MaximumOperatorLength` | 127 bytes | Content Streamのoperator名 |
 
 これらは対応可能な最大PDF仕様を表す値ではなく、現在の既定の防御上限です。入力元や用途に応じてOptionsから変更できます。
 
@@ -153,5 +174,6 @@ PDFDocEncodingで未定義の`0x7F`と`0x9F`は、`GetText()`および`PdfDocEnc
 - 間接参照の解決失敗: `PdfObjectResolutionException`
 - Catalog/Page Treeの構造不正: `PdfDocumentStructureException`
 - Stream Filter・Predictorの未対応または展開失敗: `PdfFilterException`
+- Content Streamの構文不正または未対応inline image: `PdfContentStreamException`
 
 機能を追加・変更した際は、このREADMEの対応表と制限事項も同じコミットで更新します。

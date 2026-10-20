@@ -12,6 +12,7 @@ public sealed class PdfObjectParser
 {
     private readonly PdfLexer _lexer;
     private readonly PdfObjectParserOptions _options;
+    private readonly bool _allowIndirectReferences;
     private readonly List<PdfToken> _lookahead = [];
 
     public PdfObjectParser(ReadOnlyMemory<byte> input, PdfObjectParserOptions? options = null)
@@ -25,10 +26,19 @@ public sealed class PdfObjectParser
     }
 
     public PdfObjectParser(PdfLexer lexer, PdfObjectParserOptions? options = null)
+        : this(lexer, options, allowIndirectReferences: true)
+    {
+    }
+
+    internal PdfObjectParser(
+        PdfLexer lexer,
+        PdfObjectParserOptions? options,
+        bool allowIndirectReferences)
     {
         _lexer = lexer ?? throw new ArgumentNullException(nameof(lexer));
         _options = options ?? new PdfObjectParserOptions();
         _options.Validate();
+        _allowIndirectReferences = allowIndirectReferences;
     }
 
     /// <summary>
@@ -102,7 +112,8 @@ public sealed class PdfObjectParser
     private PdfObject ParseIntegerOrIndirectReference()
     {
         var integerToken = Peek();
-        if (Peek(1).Kind == PdfTokenKind.Integer &&
+        if (_allowIndirectReferences &&
+            Peek(1).Kind == PdfTokenKind.Integer &&
             Peek(2).Kind == PdfTokenKind.Keyword &&
             Peek(2).ValueBytes.Span.SequenceEqual("R"u8))
         {
