@@ -36,7 +36,7 @@ internal partial class PdfCrossReferenceTableViewModel : ViewModelBase
 
     partial void OnSelectedItemChanged(ItemViewModel? value)
     {
-        if (value is null || value.ObjectNumber == 0 || value.Model.Kind != PdfObjectLocationKind.InUse)
+        if (value is null || value.ObjectNumber == 0 || !value.Model.IsInUse)
         {
             SelectedIndirectObjectViewModel = null;
             return;

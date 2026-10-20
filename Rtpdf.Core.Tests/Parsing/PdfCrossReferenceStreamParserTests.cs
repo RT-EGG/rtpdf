@@ -124,9 +124,6 @@ public sealed class PdfCrossReferenceStreamParserTests
         Assert.Equal(7, compressed.ObjectStreamIndex);
         Assert.Equal((ushort)0, compressed.GenerationNumber);
 
-        var exception = Assert.Throws<PdfObjectResolutionException>(() =>
-            new PdfObjectStore(document.Bytes, table).GetIndirectObject(new PdfObjectId(2)));
-        Assert.Contains("object stream support", exception.Message);
     }
 
     [Fact]

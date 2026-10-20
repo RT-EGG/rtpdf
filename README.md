@@ -14,12 +14,12 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 
 現時点では、ファイル先頭の`%PDF-x.y`ヘッダーを解析してバージョン適合性を判定する機能はありません。テストでは主に`%PDF-1.7`の入力を使用していますが、これは「PDF 1.7の全機能に対応している」という意味ではありません。
 
-実際に読み込めるかどうかは、PDFのバージョン番号よりも、下表の構造やFilterだけでファイルが構成されているかによって決まります。例えば、PDF 1.5以降でも従来形式のxref tableを使うファイルは対応範囲に入る可能性があります。一方、PDF 1.5のxref streamやobject streamを使うファイルは現在読み込めません。PDF 2.0への適合性も未検証です。
+実際に読み込めるかどうかは、PDFのバージョン番号よりも、下表の構造やFilterだけでファイルが構成されているかによって決まります。PDF 1.5で導入されたxref streamとobject streamも下記の制限内で読み込めます。PDF 2.0への適合性は未検証です。
 
 | PDFヘッダーバージョン | 互換性の目安 | 制限 |
 | --- | :---: | --- |
 | PDF 1.0～1.4 | ⚠️ 部分対応 | 下記の実装済み構造だけを使用するファイル。各バージョンへの完全適合性は未検証 |
-| PDF 1.5～1.7 | ⚠️ 部分対応 | xref tableまたはxref streamと、object stream外の間接オブジェクトを使用するファイルに限定 |
+| PDF 1.5～1.7 | ⚠️ 部分対応 | xref table、xref stream、object streamを下記の制限内で読み込み。各バージョンへの完全適合性は未検証 |
 | PDF 2.0 | ⚠️ 未検証 | 古い構文だけのファイルを解析できる可能性はあるが、互換性は保証しない |
 
 ## 対応状況
@@ -38,7 +38,7 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 | 間接オブジェクト | ✅ | object番号・generation番号の検証、キャッシュ、参照チェーンと循環の検出 |
 | xref table・trailer | ✅ | 従来形式のxref tableを解析。incremental updateの`/Prev`チェーンをたどり、最新revisionを優先して統合 |
 | xref stream | ⚠️ | PDF 1.5形式、`/W`・`/Index`、type 0/1/2、Flate圧縮、xref tableとの混在・`/XRefStm`に対応。Filter制限あり |
-| object stream | ❌ | 未対応 |
+| object stream | ⚠️ | PDF 1.5形式の`/ObjStm`、xref type 2 entry、無Filter・Flate圧縮に対応。Filter制限あり |
 | Catalog | ✅ | trailerの`/Root`からCatalogを読み込み、`/Type`と`/Pages`を検証 |
 | Page Tree | ✅ | 階層とページ順を読み込み、循環・重複・`/Parent`・`/Count`を検証 |
 | ページ継承属性 | ✅ | `MediaBox`、`CropBox`、`Resources`、`Rotate` |
@@ -53,13 +53,19 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 
 `PdfCrossReferenceParser.Parse()`は、末尾の`startxref`からxref tableまたはxref streamを読み、`/Prev`をたどって過去のrevisionを統合します。同じobject番号が複数のrevisionにある場合は最新のentryが優先されるため、更新されたobjectだけでなく、最新revisionでfreeになったobjectも反映されます。統合後のentryは`PdfCrossReferenceTable.Entries`、物理的な各xref table・streamは新しい順に`PdfCrossReferenceTable.Sections`から参照できます。
 
-対象はxref tableまたはxref streamを使ったincremental updateの**読み込み**です。両形式がrevision間で混在するファイルと、同一revisionで`/XRefStm`を使うhybrid-reference fileにも対応します。object streamとincremental updateの書き込み・保存には対応していません。`/Prev`の循環、設定された最大revision数・最大entry数、最新trailerの`/Size`と統合結果の不整合は`PdfCrossReferenceException`になります。
+対象はxref tableまたはxref streamを使ったincremental updateの**読み込み**です。両形式がrevision間で混在するファイルと、同一revisionで`/XRefStm`を使うhybrid-reference fileにも対応します。xref type 2 entryが参照するobject streamも解決できます。incremental updateの書き込み・保存には対応していません。`/Prev`の循環、設定された最大revision数・最大entry数、最新trailerの`/Size`と統合結果の不整合は`PdfCrossReferenceException`になります。
 
 ### xref stream
 
 `PdfCrossReferenceParser`は、`startxref`が従来形式のxref tableまたはxref streamのどちらを指しているかを判別します。xref streamの`/W`は各fieldが0～8 bytes、`/Index`は非重複かつobject番号が昇順の範囲に対応します。`/Index`省略時は`[0 /Size]`として扱います。entry type 0（free）、type 1（ファイル内offset）、type 2（object stream番号とindex）を保持し、未知のtypeは将来拡張との互換性のため未登録entryとして扱います。
 
-stream dataは無Filterまたは`/FlateDecode`を読み込めます。複数Filter、未対応Filter、FlateのPredictorなどの範囲は後述の「StreamとFilterの対応」と同じです。type 2 entryの位置情報は`PdfObjectLocation.ObjectStreamNumber`と`ObjectStreamIndex`から参照できますが、object stream内のobject解決はまだ未対応で、`PdfObjectStore`は`PdfObjectResolutionException`を返します。
+stream dataは無Filterまたは`/FlateDecode`を読み込めます。複数Filter、未対応Filter、FlateのPredictorなどの範囲は後述の「StreamとFilterの対応」と同じです。type 2 entryの位置情報は`PdfObjectLocation.ObjectStreamNumber`と`ObjectStreamIndex`から参照でき、`PdfObjectStore`がobject stream内のobjectを解決します。
+
+### object stream
+
+`PdfObjectStore`はxref streamのtype 2 entryをたどり、`/Type /ObjStm`のstreamを展開して、`/N`個のobject番号・offset pairと`/First`以降の直接オブジェクトを読み込みます。object stream本体と展開結果はキャッシュされるため、同じstream内の複数objectを解決しても再展開しません。Inspectorからもtype 2 entryを選択して内容を表示できます。
+
+object stream本体はgeneration 0の非圧縮間接オブジェクトである必要があります。格納objectもgeneration 0に限定し、xref entryのindexとheaderのobject番号が一致すること、offsetが昇順で範囲内にあることを検証します。stream object、格納object全体が単独の間接参照となる形式、暗号化辞書をobject streamへ格納する形式は受け付けません。利用できるFilterとPredictorは後述の「StreamとFilterの対応」と同じです。
 
 ### PDF日時文字列
 
@@ -122,6 +128,9 @@ if (PdfDateParser.TryParse(
 | `MaximumFilterCount` | 16 | 1つのStreamへ適用するFilter数 |
 | `MaximumReferenceDepth` | 100 | 間接参照チェーン |
 | `MaximumCachedObjects` | 100,000 | ObjectStoreのキャッシュ |
+| `MaximumObjectsPerObjectStream` | 1,000,000 | 1つのobject streamに格納できるobject数 |
+| `MaximumCachedObjectStreams` | 1,024 | ObjectStoreが保持する展開済みobject stream数 |
+| `MaximumCachedObjectStreamBytes` | 256 MiB | ObjectStoreが保持する展開済みobject streamの合計サイズ |
 | `MaximumPageTreeDepth` | 100 | Page Treeの深さ |
 | `MaximumPageTreeNodes` | 1,000,000 | Page Treeの要素数 |
 | `MaximumPages` | 1,000,000 | ページ数 |
