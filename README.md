@@ -3,7 +3,7 @@
 PDFの内部構造を外部PDFライブラリに依存せず解析するための、開発中の.NETライブラリです。
 
 > [!IMPORTANT]
-> 現在の`Rtpdf.Core`は部分実装です。任意のPDFを開ける完成済みReaderや、PDFへの書き込み・描画機能はまだ提供していません。
+> 現在の`Rtpdf.Core`は部分実装です。任意のPDFを扱える完成済みReader／Writerや、PDFの描画機能はまだ提供していません。
 
 ## 動作環境
 
@@ -30,6 +30,32 @@ foreach (var page in document.Catalog.PageTree.Pages)
 `PdfByteSource`は長さとoffset指定読み込みを提供する入力抽象です。`FromMemory`、`FromStream`、`OpenFile`のfactoryに加え、派生型を実装して独自の入力元を渡せます。ObjectStoreはsource全体を保持せず、xref offsetから必要な間接objectの範囲だけを読み込み、解析結果をキャッシュします。`PdfByteSource`を直接渡した場合は呼び出し側がsourceの寿命を管理します。
 
 現時点ではxref parserだけが`Open`中にsource全体の一時bufferを使用します。このbufferはOpen完了後には保持されません。xrefの末尾探索とsection解析を完全なrandom accessへ移行する作業、および2 GiBを超えるsourceへの対応は未完了です。
+
+## PDFを生成する
+
+`PdfDocumentBuilder`へ間接objectを登録し、Catalogを`Root`へ設定すると、`PdfDocumentWriter`で新しいPDFを生成できます。
+
+```csharp
+var builder = new PdfDocumentBuilder();
+var pages = builder.AddObject(new PdfDictionary
+{
+    ["Type"] = new PdfName("Pages"),
+    ["Kids"] = new PdfArray(),
+    ["Count"] = new PdfInteger(0),
+});
+var catalog = builder.AddObject(new PdfDictionary
+{
+    ["Type"] = new PdfName("Catalog"),
+    ["Pages"] = pages.CreateReference(),
+});
+builder.Root = catalog.CreateReference();
+
+PdfDocumentWriter.Write("output.pdf", builder);
+```
+
+Writerは従来形式のxref table、trailer、`startxref`を生成し、objectのbyte offsetとStreamの`/Length`を自動計算します。ファイルパスと書き込み可能な`Stream`に対応し、出力Streamはseek可能である必要がありません。Dictionary entryはNameのbyte順、間接objectは登録順で出力されるため、同じモデルから再現可能な結果を生成します。
+
+現時点では新規PDFの低レベル生成だけに対応します。既存PDFの完全保存、incremental update、xref/object streamの生成、自動圧縮、暗号化、電子署名、フォント・画像・Content Streamを組み立てる高レベルAPIには対応していません。`PdfStream`へ設定したencoded dataと`/Filter`はそのまま書き込まれます。
 
 ## PDFバージョンの扱い
 
@@ -68,7 +94,7 @@ foreach (var page in document.Catalog.PageTree.Pages)
 | Stream Filter | ⚠️ | Flate、LZW、ASCIIHex、ASCII85、RunLengthに対応。画像Codec系は未対応 |
 | Content Streamの命令解析 | ⚠️ | 展開済みStreamから直接operandとoperatorを命令単位に解析。inline imageとoperator semanticsは未対応 |
 | 暗号化PDF | ⚠️ | Standard Security Handler Revision 2～4、RC4、AES-128、user/owner passwordに対応 |
-| Writer・保存 | ❌ | 新規保存、完全保存、incremental updateのいずれも未対応 |
+| Writer・保存 | ⚠️ | 低レベルobjectからの新規PDF生成、従来xref table、trailer、Streamに対応。完全保存とincremental updateは未対応 |
 | 描画・レンダリング | ❌ | 対象外。将来は別レイヤーとして検討 |
 
 ### Incremental Update
@@ -212,6 +238,7 @@ StreamはFilter展開前に復号され、object streamは外側のStreamだけ�
 | `MaximumOperations` | 1,000,000 | 1つのContent Streamの命令数 |
 | `MaximumOperandsPerOperation` | 100,000 | 1つのContent Stream命令のoperand数 |
 | `MaximumOperatorLength` | 127 bytes | Content Streamのoperator名 |
+| `MaximumObjectNestingDepth` | 100 | Writerが出力する直接object graphの深さ |
 
 これらは対応可能な最大PDF仕様を表す値ではなく、現在の既定の防御上限です。入力元や用途に応じてOptionsから変更できます。
 
@@ -226,5 +253,6 @@ StreamはFilter展開前に復号され、object streamは外側のStreamだけ�
 - Stream Filter・Predictorの未対応または展開失敗: `PdfFilterException`
 - Content Streamの構文不正または未対応inline image: `PdfContentStreamException`
 - 暗号化設定、password認証、復号の失敗: `PdfEncryptionException`
+- PDFの出力モデル、参照、サイズ制限の違反: `PdfWriteException`
 
 機能を追加・変更した際は、このREADMEの対応表と制限事項も同じコミットで更新します。
