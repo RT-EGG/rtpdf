@@ -10,6 +10,23 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 - .NET 10
 - `Rtpdf.Core`は.NET BCL以外のPDFライブラリに依存しません
 
+## PDFを開く
+
+`PdfDocumentReader.Open(...)`はファイルパス、`Stream`、`ReadOnlyMemory<byte>`、`PdfByteSource`を受け取り、xref、ObjectStore、Catalog、StreamDecoderをまとめた`PdfDocument`を返します。
+
+```csharp
+var document = PdfDocumentReader.Open("sample.pdf");
+
+foreach (var page in document.Catalog.PageTree.Pages)
+{
+    // page.Dictionary、page.MediaBoxなどを参照
+}
+```
+
+`Stream` overloadは現在位置から末尾までを読みます。既定では読み込み後にStreamを閉じ、`leaveOpen: true`を指定した場合は開いたままにします。seekできないStreamも利用できます。
+
+`PdfByteSource`は長さとoffset指定読み込みを提供する入力抽象です。`FromMemory`、`FromStream`、`OpenFile`のfactoryに加え、派生型を実装して独自の入力元を渡せます。現在のParserは`Open`時にsource全体を1つの共有バッファへ展開しますが、ParserとObjectStore間でそのバッファを共有し、従来の重複コピーを避けています。ファイルや所有対象Streamは`Open`完了時に解放され、`PdfByteSource`を直接渡した場合の破棄は呼び出し側が管理します。
+
 ## PDFバージョンの扱い
 
 現時点では、ファイル先頭の`%PDF-x.y`ヘッダーを解析してバージョン適合性を判定する機能はありません。テストでは主に`%PDF-1.7`の入力を使用していますが、これは「PDF 1.7の全機能に対応している」という意味ではありません。
@@ -32,6 +49,7 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 
 | 領域 | 状況 | 現在の範囲 |
 | --- | :---: | --- |
+| Document Reader・ByteSource | ⚠️ | path、Stream、memory、offset指定入力に対応。現時点ではOpen時にsource全体をメモリへ展開 |
 | PDFオブジェクトモデル | ✅ | null、真偽値、整数、実数、Name、Literal/Hex String、Array、Dictionary、Stream、間接参照 |
 | Lexer・直接オブジェクトParser | ✅ | 対応済みオブジェクトの字句解析と構文解析 |
 | PDF日時文字列 | ✅ | `D:YYYYMMDDHHmmSSOHH'mm'`。年以降の末尾フィールドとPDF 1.xの省略可能な`D:`に対応 |
@@ -123,6 +141,7 @@ if (PdfDateParser.TryParse(
 
 | 設定 | 既定値 | 対象 |
 | --- | ---: | --- |
+| `MaximumSourceLength` | 256 MiB | `PdfDocumentReader`がメモリへ展開するPDF source |
 | `MaximumEncodedStreamLength` | 256 MiB | 読み込む圧縮済みStream |
 | `MaximumDecodedStreamLength` | 256 MiB | Filter展開後のStream。展開処理中にも検査 |
 | `MaximumFilterCount` | 16 | 1つのStreamへ適用するFilter数 |

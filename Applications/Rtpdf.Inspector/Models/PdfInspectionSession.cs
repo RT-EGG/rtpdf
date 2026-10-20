@@ -5,10 +5,13 @@ using Rtpdf.Core.Storage;
 
 namespace Rtpdf.Inspector.Models;
 
-internal sealed record PdfInspectionSession(
-    byte[] Source,
-    PdfCrossReferenceTable CrossReferences,
-    PdfObjectStore ObjectStore,
-    PdfCatalog Catalog,
-    PdfStreamDecoder StreamDecoder
-);
+internal sealed record PdfInspectionSession(PdfDocument Document)
+{
+    public PdfCrossReferenceTable CrossReferences => Document.CrossReferences;
+
+    public PdfObjectStore ObjectStore => Document.ObjectStore;
+
+    public PdfCatalog Catalog => Document.Catalog;
+
+    public PdfStreamDecoder StreamDecoder => Document.StreamDecoder;
+}

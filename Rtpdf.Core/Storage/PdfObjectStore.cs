@@ -35,6 +35,19 @@ public sealed class PdfObjectStore
         _parser = new PdfIndirectObjectParser(_options.ObjectParserOptions);
     }
 
+    internal PdfObjectStore(
+        byte[] input,
+        PdfCrossReferenceTable crossReferences,
+        PdfObjectStoreOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        _input = input;
+        _crossReferences = crossReferences ?? throw new ArgumentNullException(nameof(crossReferences));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _options.Validate();
+        _parser = new PdfIndirectObjectParser(_options.ObjectParserOptions);
+    }
+
     public PdfObjectStore(
         Stream input,
         PdfCrossReferenceTable crossReferences,
