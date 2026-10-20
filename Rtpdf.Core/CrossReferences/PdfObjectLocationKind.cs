@@ -1,10 +1,11 @@
 namespace Rtpdf.Core.CrossReferences;
 
 /// <summary>
-/// Describes the state of an entry in a conventional PDF cross-reference table.
+/// Describes the state of a PDF cross-reference entry.
 /// </summary>
 public enum PdfObjectLocationKind
 {
     Free,
     InUse,
+    Compressed,
 }

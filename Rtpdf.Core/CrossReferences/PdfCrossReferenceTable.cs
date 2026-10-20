@@ -3,7 +3,7 @@ using Rtpdf.Core.Objects;
 namespace Rtpdf.Core.CrossReferences;
 
 /// <summary>
-/// The effective conventional cross-reference table obtained from one or more PDF revisions.
+/// The effective cross-reference table obtained from one or more PDF revisions.
 /// </summary>
 public sealed class PdfCrossReferenceTable
 {

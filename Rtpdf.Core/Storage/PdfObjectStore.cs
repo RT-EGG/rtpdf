@@ -153,6 +153,13 @@ public sealed class PdfObjectStore
                 objectId);
         }
 
+        if (location.Kind == PdfObjectLocationKind.Compressed)
+        {
+            throw new PdfObjectResolutionException(
+                "Compressed object resolution requires object stream support",
+                objectId);
+        }
+
         if (!location.IsInUse || location.ByteOffset is not long byteOffset)
         {
             throw new PdfObjectResolutionException(

@@ -1,7 +1,7 @@
 namespace Rtpdf.Core.Diagnostics;
 
 /// <summary>
-/// The exception thrown when a conventional cross-reference table is malformed.
+/// The exception thrown when PDF cross-reference data is malformed.
 /// </summary>
 public sealed class PdfCrossReferenceException : FormatException
 {

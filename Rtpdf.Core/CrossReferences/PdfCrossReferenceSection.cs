@@ -3,7 +3,7 @@ using Rtpdf.Core.Objects;
 namespace Rtpdf.Core.CrossReferences;
 
 /// <summary>
-/// One physical conventional cross-reference section in a PDF revision.
+/// One physical cross-reference section in a PDF revision.
 /// </summary>
 public sealed class PdfCrossReferenceSection
 {
@@ -15,7 +15,9 @@ public sealed class PdfCrossReferenceSection
         int trailerOffset,
         int declaredSize,
         SortedDictionary<int, PdfObjectLocation> entries,
-        PdfDictionary trailer)
+        PdfDictionary trailer,
+        PdfCrossReferenceSectionKind kind = PdfCrossReferenceSectionKind.ConventionalTable,
+        PdfObjectId? crossReferenceStreamObjectId = null)
     {
         CrossReferenceOffset = crossReferenceOffset;
         StartXrefKeywordOffset = startXrefKeywordOffset;
@@ -23,6 +25,8 @@ public sealed class PdfCrossReferenceSection
         DeclaredSize = declaredSize;
         _entries = entries;
         Trailer = trailer;
+        Kind = kind;
+        CrossReferenceStreamObjectId = crossReferenceStreamObjectId;
 
         PreviousCrossReferenceOffset = trailer.TryGetValue("Prev", out var previous) &&
             previous is PdfInteger previousInteger
@@ -32,13 +36,20 @@ public sealed class PdfCrossReferenceSection
 
     public long CrossReferenceOffset { get; }
 
+    public PdfCrossReferenceSectionKind Kind { get; }
+
+    public PdfObjectId? CrossReferenceStreamObjectId { get; }
+
     /// <summary>
-    /// Gets the offset of the <c>startxref</c> keyword, or -1 for a section reached through
-    /// <c>/Prev</c> or parsed directly.
+    /// Gets the offset of the <c>startxref</c> keyword, or -1 for a section reached indirectly
+    /// or parsed directly.
     /// </summary>
     public int StartXrefKeywordOffset { get; }
 
-    /// <summary>Gets the byte offset of the <c>trailer</c> keyword.</summary>
+    /// <summary>
+    /// Gets the byte offset of the <c>trailer</c> keyword for a conventional table, or the
+    /// xref stream object for a stream section.
+    /// </summary>
     public int TrailerOffset { get; }
 
     public int DeclaredSize { get; }

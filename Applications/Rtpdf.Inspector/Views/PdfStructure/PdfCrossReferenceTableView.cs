@@ -28,7 +28,7 @@ internal class PdfCrossReferenceTableView(PdfCrossReferenceTableViewModel viewMo
                 new(GridLength.Star),
             ],
             ColumnDefinitions = [
-                new(400.0, GridUnitType.Pixel),
+                new(550.0, GridUnitType.Pixel),
                 new(4.0, GridUnitType.Pixel),
                 new(GridLength.Star) { MinWidth = 200.0, },
             ]
@@ -54,7 +54,8 @@ internal class PdfCrossReferenceTableView(PdfCrossReferenceTableViewModel viewMo
                     "ObjectNo" => item.ObjectNumberText,
                     "GenNo" => item.GenerationNumberText,
                     "Kind" => item.Kind,
-                    "Offset/NextFree" => item.OffsetOrNextFreeText,
+                    "Offset/NextFree/ObjStm" => item.OffsetOrNextFreeText,
+                    "ObjStmIndex" => item.ObjectStreamIndexText,
                     _ => textBlock.Text,
                 };
                 textBlock.FontFamily = new FontFamily("avares://Rtpdf.Inspector/Assets/Fonts#Cascadia Mono");
