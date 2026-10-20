@@ -17,7 +17,7 @@ public sealed class FlateDecodeFilter : IPdfFilter
         int maximumDecodedLength)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(maximumDecodedLength);
-        var predictor = FlatePredictor.Create(decodeParameters, Name);
+        var predictor = PdfPredictor.Create(decodeParameters, Name);
         var maximumInflatedLength = predictor.GetMaximumInflatedLength(maximumDecodedLength);
 
         try

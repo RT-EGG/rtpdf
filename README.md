@@ -43,7 +43,7 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 | Page Tree | ✅ | 階層とページ順を読み込み、循環・重複・`/Parent`・`/Count`を検証 |
 | ページ継承属性 | ✅ | `MediaBox`、`CropBox`、`Resources`、`Rotate` |
 | Stream境界 | ✅ | 直接・間接`/Length`に対応。データ中の`endstream`文字列には依存しない |
-| Stream Filter | ⚠️ | `/FlateDecode`のみ。詳細は次節を参照 |
+| Stream Filter | ⚠️ | Flate、LZW、ASCIIHex、ASCII85、RunLengthに対応。画像Codec系は未対応 |
 | Content Streamの命令解析 | ⚠️ | 展開済みStreamから直接operandとoperatorを命令単位に解析。inline imageとoperator semanticsは未対応 |
 | 暗号化PDF | ❌ | Security Handler未対応 |
 | Writer・保存 | ❌ | 新規保存、完全保存、incremental updateのいずれも未対応 |
@@ -59,7 +59,7 @@ PDFの内部構造を外部PDFライブラリに依存せず解析するため�
 
 `PdfCrossReferenceParser`は、`startxref`が従来形式のxref tableまたはxref streamのどちらを指しているかを判別します。xref streamの`/W`は各fieldが0～8 bytes、`/Index`は非重複かつobject番号が昇順の範囲に対応します。`/Index`省略時は`[0 /Size]`として扱います。entry type 0（free）、type 1（ファイル内offset）、type 2（object stream番号とindex）を保持し、未知のtypeは将来拡張との互換性のため未登録entryとして扱います。
 
-stream dataは無Filterまたは`/FlateDecode`を読み込めます。複数Filter、未対応Filter、FlateのPredictorなどの範囲は後述の「StreamとFilterの対応」と同じです。type 2 entryの位置情報は`PdfObjectLocation.ObjectStreamNumber`と`ObjectStreamIndex`から参照でき、`PdfObjectStore`がobject stream内のobjectを解決します。
+stream dataは無Filterまたは後述の対応済みFilterを読み込めます。複数Filter、未対応Filter、Predictorなどの範囲は「StreamとFilterの対応」と同じです。type 2 entryの位置情報は`PdfObjectLocation.ObjectStreamNumber`と`ObjectStreamIndex`から参照でき、`PdfObjectStore`がobject stream内のobjectを解決します。
 
 ### object stream
 
@@ -117,21 +117,21 @@ inline imageの`BI ... ID ... EI`は、画像データ中に現れる`EI`との�
 | Filter | 状況 | 備考 |
 | --- | :---: | --- |
 | `FlateDecode` | ✅ | zlib形式のDEFLATEを展開。TIFF Predictor 2とPNG Predictor 10～15に対応 |
-| `ASCIIHexDecode` | ❌ | 未対応 |
-| `ASCII85Decode` | ❌ | 未対応 |
-| `LZWDecode` | ❌ | 未対応 |
-| `RunLengthDecode` | ❌ | 未対応 |
+| `ASCIIHexDecode` | ✅ | PDF空白を無視。`>`またはStream末尾で終了し、奇数nibbleは下位を0で補完 |
+| `ASCII85Decode` | ✅ | PDF形式の`~>`終端、`z`短縮、最終partial groupに対応。`<~`prefixは使用しない |
+| `LZWDecode` | ✅ | 9～12 bit code、clear/EOD code、`EarlyChange` 0/1、TIFF/PNG Predictorに対応 |
+| `RunLengthDecode` | ✅ | literal/repeated runとEOD markerに対応 |
 | `CCITTFaxDecode` | ❌ | 未対応 |
 | `JBIG2Decode` | ❌ | 未対応 |
 | `DCTDecode` | ❌ | 未対応 |
 | `JPXDecode` | ❌ | 未対応 |
 | `Crypt` | ❌ | 未対応 |
 
-`/Filter`は単一NameとArrayの両方に対応し、Arrayの場合は宣言順にFilterを適用します。現在は登録済みFilterが`FlateDecode`だけなので、それ以外を含む場合は`PdfFilterException`になります。
+`/Filter`は単一NameとArrayの両方に対応し、Arrayの場合は宣言順にFilterを適用します。上表の未対応Filterを含む場合は`PdfFilterException`になります。短縮名の`/Fl`、`/LZW`、`/AHx`、`/A85`、`/RL`はinline image用であるため、通常のStream Filter名としては受け付けません。
 
 `/Filter`と`/DecodeParms`の間接参照は、`PdfObjectStore`を渡して`PdfStreamDecoder`を作成した場合に解決できます。`/DecodeParms`はDictionary、またはFilter Arrayと同数のDictionary/null Arrayを受け付けます。
 
-### FlateDecode Predictor
+### FlateDecode・LZWDecode Predictor
 
 | `/Predictor` | 方式 | 状況 |
 | ---: | --- | :---: |
@@ -140,7 +140,9 @@ inline imageの`BI ... ID ... EI`は、画像データ中に現れる`EI`との�
 | `10`～`14` | 固定PNG Predictor（None、Sub、Up、Average、Paeth） | ✅ |
 | `15` | 行ごとに選択するPNG Predictor | ✅ |
 
-`Colors`（既定値1）、`BitsPerComponent`（既定値8）、`Columns`（既定値1）を解釈します。`BitsPerComponent`は1、2、4、8、16に対応します。行の途中で終わるデータ、不正なPNG filter byte、範囲外または未対応のparameterは`PdfFilterException`になります。展開上限はPNGの行先頭filter byteを除いた最終データ長に適用しつつ、中間データにも算出した上限を適用します。
+`FlateDecode`と`LZWDecode`の両方で、`Colors`（既定値1）、`BitsPerComponent`（既定値8）、`Columns`（既定値1）を解釈します。`BitsPerComponent`は1、2、4、8、16に対応します。行の途中で終わるデータ、不正なPNG filter byte、範囲外または未対応のparameterは`PdfFilterException`になります。展開上限はPNGの行先頭filter byteを除いた最終データ長に適用しつつ、中間データにも算出した上限を適用します。
+
+`LZWDecode`の`EarlyChange`は既定値1で、0も指定できます。0または1以外、EOD codeの欠落、未定義code、切り詰められたbit列は`PdfFilterException`になります。
 
 ## 現在の主要な安全制限
 

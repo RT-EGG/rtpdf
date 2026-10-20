@@ -3,7 +3,7 @@ using Rtpdf.Core.Objects;
 
 namespace Rtpdf.Core.Filters;
 
-internal sealed class FlatePredictor
+internal sealed class PdfPredictor
 {
     private static readonly HashSet<int> SupportedBitsPerComponent = [1, 2, 4, 8, 16];
 
@@ -15,7 +15,7 @@ internal sealed class FlatePredictor
     private readonly int _bytesPerPixel;
     private readonly int _rowBytes;
 
-    private FlatePredictor(
+    private PdfPredictor(
         string filterName,
         int predictor,
         int colors,
@@ -33,12 +33,12 @@ internal sealed class FlatePredictor
         _rowBytes = rowBytes;
     }
 
-    public static FlatePredictor Create(PdfDictionary? parameters, string filterName)
+    public static PdfPredictor Create(PdfDictionary? parameters, string filterName)
     {
         var predictor = ReadInteger(parameters, "Predictor", defaultValue: 1, filterName);
         if (predictor == 1)
         {
-            return new FlatePredictor(filterName, predictor, 1, 8, 1, 1, 1);
+            return new PdfPredictor(filterName, predictor, 1, 8, 1, 1, 1);
         }
 
         if (predictor != 2 && predictor is not (>= 10 and <= 15))
@@ -82,7 +82,7 @@ internal sealed class FlatePredictor
             throw Error("Predictor sample count is too large", filterName);
         }
 
-        return new FlatePredictor(
+        return new PdfPredictor(
             filterName,
             predictor,
             colors,

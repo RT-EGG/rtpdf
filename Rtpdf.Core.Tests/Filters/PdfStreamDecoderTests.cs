@@ -61,7 +61,7 @@ public sealed class PdfStreamDecoderTests
     public void DecodeRejectsUnsupportedAndInvalidFlateData()
     {
         var unsupported = new PdfStream(
-            new PdfDictionary { ["Filter"] = new PdfName("LZWDecode") },
+            new PdfDictionary { ["Filter"] = new PdfName("DCTDecode") },
             [1, 2, 3]);
         var invalidFlate = new PdfStream(
             new PdfDictionary { ["Filter"] = new PdfName("FlateDecode") },
@@ -72,7 +72,7 @@ public sealed class PdfStreamDecoderTests
         var invalidError = Assert.Throws<PdfFilterException>(() =>
             new PdfStreamDecoder().Decode(invalidFlate));
 
-        Assert.Equal("LZWDecode", unsupportedError.FilterName);
+        Assert.Equal("DCTDecode", unsupportedError.FilterName);
         Assert.Equal("FlateDecode", invalidError.FilterName);
         Assert.IsType<InvalidDataException>(invalidError.InnerException);
     }
