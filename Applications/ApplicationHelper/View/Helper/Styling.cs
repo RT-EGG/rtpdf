@@ -10,4 +10,10 @@ public static class Styling
         element.Styles.Add(style);
         return element;
     }
+
+    public static T WithClass<T>(this T control, string className) where T : StyledElement
+    {
+        control.Classes.Add(className);
+        return control;
+    }
 }
