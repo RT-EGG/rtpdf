@@ -41,6 +41,8 @@ var pages = new PdfPageTreeBuilder(builder);
 var page = pages.AddPage(new PdfRectangle(0, 0, 595, 842));
 
 page.CropBox = new PdfRectangle(20, 20, 575, 822);
+var image = PdfImageXObjectBuilder.FromJpeg(jpegBytes);
+page.AddXObject("Image1", image);
 var content = new PdfContentStreamBuilder()
     .SaveGraphicsState()
     .ConcatenateMatrix(320, 0, 0, 240, 100, 300)
@@ -55,9 +57,11 @@ PdfDocumentWriter.Write("output.pdf", builder);
 
 `PdfContentStreamBuilder`は直接operandとoperatorを正規化した構文で出力します。任意のoperatorは`AppendOperation`で追加でき、画像配置で使用する`q`、`cm`、`Do`、`Q`には型付きメソッドがあります。`q`と`Q`の対応、直接object制約、命令数・operand数・生成byte数を検証します。operator固有のoperand数・意味検証とinline imageには対応していません。
 
+`PdfImageXObjectBuilder.FromJpeg`はbaseline・extended sequential・progressive形式の8-bit Gray/RGB JPEGから寸法とcolor componentを読み、再圧縮せず`DCTDecode`として埋め込みます。`FromRgb24`はstride付きRGB24画素を受け取り、row paddingを除外して`FlateDecode`で圧縮します。`PdfPageBuilder.AddXObject`でPage Resourceへの登録と間接object化をまとめて行えます。
+
 Writerは従来形式のxref table、trailer、`startxref`を生成し、objectのbyte offsetとStreamの`/Length`を自動計算します。ファイルパスと書き込み可能な`Stream`に対応し、出力Streamはseek可能である必要がありません。Dictionary entryはNameのbyte順、間接objectは登録順で出力されるため、同じモデルから再現可能な結果を生成します。
 
-現時点では新規PDFの低レベル生成だけに対応します。既存PDFの完全保存、incremental update、xref/object streamの生成、自動圧縮、暗号化、電子署名、フォントやImage XObjectを組み立てる高レベルAPIには対応していません。`PdfStream`へ設定したencoded dataと`/Filter`はそのまま書き込まれます。
+現時点では新規PDFの低レベル生成だけに対応します。既存PDFの完全保存、incremental update、xref/object streamの生成、汎用Streamの自動圧縮、暗号化、電子署名、フォント作成には対応していません。画像生成ではCMYK JPEG、alpha soft mask、PNGなどの画像ファイル解析は未対応です。`PdfStream`へ設定したencoded dataと`/Filter`はそのまま書き込まれます。
 
 ## PDFバージョンの扱い
 
@@ -96,6 +100,7 @@ Writerは従来形式のxref table、trailer、`startxref`を生成し、object�
 | Stream Filter | ⚠️ | Flate、LZW、ASCIIHex、ASCII85、RunLengthに対応。画像Codec系は未対応 |
 | Content Streamの命令解析 | ⚠️ | 展開済みStreamから直接operandとoperatorを命令単位に解析。inline imageとoperator semanticsは未対応 |
 | Content Streamの命令生成 | ⚠️ | 汎用operatorと`q`・`Q`・`cm`・`Do`を生成。直接operand、graphics state対応、各種上限を検証 |
+| Image XObject生成 | ⚠️ | 8-bit Gray/RGB JPEGのpassthroughとRGB24画素のFlate圧縮に対応。CMYK、alpha、画像ファイルdecodeは未対応 |
 | 暗号化PDF | ⚠️ | Standard Security Handler Revision 2～4、RC4、AES-128、user/owner passwordに対応 |
 | Writer・保存 | ⚠️ | 新規PDF、flat Page Tree、Page属性・Resources・Contents、従来xref table、trailer、Streamに対応。完全保存とincremental updateは未対応 |
 | 描画・レンダリング | ❌ | 対象外。将来は別レイヤーとして検討 |
@@ -178,7 +183,7 @@ inline imageの`BI ... ID ... EI`は、画像データ中に現れる`EI`との�
 | `RunLengthDecode` | ✅ | literal/repeated runとEOD markerに対応 |
 | `CCITTFaxDecode` | ❌ | 未対応 |
 | `JBIG2Decode` | ❌ | 未対応 |
-| `DCTDecode` | ❌ | 未対応 |
+| `DCTDecode` | ❌ | Readerでのdecodeは未対応。Writerは対応JPEGを再圧縮せずImage XObjectへ格納可能 |
 | `JPXDecode` | ❌ | 未対応 |
 | `Crypt` | ❌ | 未対応 |
 
@@ -247,6 +252,9 @@ StreamはFilter展開前に復号され、object streamは外側のStreamだけ�
 | `MaximumOperatorLength` | 127 bytes | Content Streamのoperator名 |
 | `MaximumContentLength` | 256 MiB | Content Stream Builderが生成するdecoded命令列 |
 | `MaximumObjectNestingDepth` | 100 | Writerが出力する直接object graphの深さ |
+| `PdfImageXObjectOptions.MaximumPixels` | 100,000,000 | Image XObject Builderが受け付ける画素数 |
+| `PdfImageXObjectOptions.MaximumSourceLength` | 256 MiB | Image XObject Builderが受け付けるJPEG・RGB24 source |
+| `PdfImageXObjectOptions.MaximumEncodedLength` | 256 MiB | Image XObject Builderが生成・保持するencoded image |
 
 これらは対応可能な最大PDF仕様を表す値ではなく、現在の既定の防御上限です。入力元や用途に応じてOptionsから変更できます。
 

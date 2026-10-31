@@ -153,19 +153,22 @@ public sealed class PdfPageBuilder
                 $"Resource reference {reference.ObjectId} R is not registered in this document");
         }
 
-        if (!Resources.TryGetValue(category, out var categoryValue))
-        {
-            categoryValue = new PdfDictionary();
-            Resources[category] = categoryValue;
-        }
+        GetOrCreateResourceCategory(category)[name] = value;
+    }
 
-        if (categoryValue is not PdfDictionary categoryDictionary)
-        {
-            throw new PdfWriteException(
-                $"Page resource category {category} is not a dictionary");
-        }
+    /// <summary>Registers a stream and adds it to this page's XObject resources.</summary>
+    public PdfIndirectReference AddXObject(string name, PdfStream xObject) =>
+        AddXObject(new PdfName(name), xObject);
 
-        categoryDictionary[name] = value;
+    /// <summary>Registers a stream and adds it to this page's XObject resources.</summary>
+    public PdfIndirectReference AddXObject(PdfName name, PdfStream xObject)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(xObject);
+        var category = GetOrCreateResourceCategory(new PdfName("XObject"));
+        var reference = _document.AddObject(xObject).CreateReference();
+        category[name] = reference;
+        return reference;
     }
 
     private static PdfArray CreateRectangleArray(PdfRectangle rectangle) =>
@@ -181,6 +184,19 @@ public sealed class PdfPageBuilder
         decimal.Truncate(value) == value && value is >= long.MinValue and <= long.MaxValue
             ? new PdfInteger(decimal.ToInt64(value))
             : new PdfReal(value);
+
+    private PdfDictionary GetOrCreateResourceCategory(PdfName category)
+    {
+        if (!Resources.TryGetValue(category, out var categoryValue))
+        {
+            var newCategory = new PdfDictionary();
+            Resources[category] = newCategory;
+            return newCategory;
+        }
+
+        return categoryValue as PdfDictionary ?? throw new PdfWriteException(
+            $"Page resource category {category} is not a dictionary");
+    }
 
     private static void ValidateRectangle(PdfRectangle value, string parameterName)
     {
