@@ -30,4 +30,19 @@ public sealed class PdfDocumentBuilder
         _objects.Add(result);
         return result;
     }
+
+    internal bool TryGetObject(PdfIndirectReference reference, out PdfIndirectObject value)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        var index = reference.ObjectId.ObjectNumber - 1;
+        if ((uint)index < (uint)_objects.Count &&
+            _objects[index].ObjectId == reference.ObjectId)
+        {
+            value = _objects[index];
+            return true;
+        }
+
+        value = null!;
+        return false;
+    }
 }

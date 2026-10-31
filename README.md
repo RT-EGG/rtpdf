@@ -33,25 +33,20 @@ foreach (var page in document.Catalog.PageTree.Pages)
 
 ## PDFを生成する
 
-`PdfDocumentBuilder`へ間接objectを登録し、Catalogを`Root`へ設定すると、`PdfDocumentWriter`で新しいPDFを生成できます。
+`PdfDocumentBuilder`へ間接objectを登録すると、`PdfDocumentWriter`で新しいPDFを生成できます。一般的なPage Treeは`PdfPageTreeBuilder`がCatalog、`/Pages`、`/Kids`、`/Count`、各Pageの`/Parent`を構築します。
 
 ```csharp
 var builder = new PdfDocumentBuilder();
-var pages = builder.AddObject(new PdfDictionary
-{
-    ["Type"] = new PdfName("Pages"),
-    ["Kids"] = new PdfArray(),
-    ["Count"] = new PdfInteger(0),
-});
-var catalog = builder.AddObject(new PdfDictionary
-{
-    ["Type"] = new PdfName("Catalog"),
-    ["Pages"] = pages.CreateReference(),
-});
-builder.Root = catalog.CreateReference();
+var pages = new PdfPageTreeBuilder(builder);
+var page = pages.AddPage(new PdfRectangle(0, 0, 595, 842));
+
+page.CropBox = new PdfRectangle(20, 20, 575, 822);
+page.AddContent(new PdfStream(new PdfDictionary(), contentBytes));
 
 PdfDocumentWriter.Write("output.pdf", builder);
 ```
+
+`PdfPageBuilder`は`MediaBox`、`CropBox`、90度単位の回転、Page Resources、単一または複数のContent Streamを管理します。`SetResource(category, name, value)`で`XObject`などの名前付きresourceも登録できます。現時点のPage Treeは1階層のflat構造です。
 
 Writerは従来形式のxref table、trailer、`startxref`を生成し、objectのbyte offsetとStreamの`/Length`を自動計算します。ファイルパスと書き込み可能な`Stream`に対応し、出力Streamはseek可能である必要がありません。Dictionary entryはNameのbyte順、間接objectは登録順で出力されるため、同じモデルから再現可能な結果を生成します。
 
@@ -94,7 +89,7 @@ Writerは従来形式のxref table、trailer、`startxref`を生成し、object�
 | Stream Filter | ⚠️ | Flate、LZW、ASCIIHex、ASCII85、RunLengthに対応。画像Codec系は未対応 |
 | Content Streamの命令解析 | ⚠️ | 展開済みStreamから直接operandとoperatorを命令単位に解析。inline imageとoperator semanticsは未対応 |
 | 暗号化PDF | ⚠️ | Standard Security Handler Revision 2～4、RC4、AES-128、user/owner passwordに対応 |
-| Writer・保存 | ⚠️ | 低レベルobjectからの新規PDF生成、従来xref table、trailer、Streamに対応。完全保存とincremental updateは未対応 |
+| Writer・保存 | ⚠️ | 新規PDF、flat Page Tree、Page属性・Resources・Contents、従来xref table、trailer、Streamに対応。完全保存とincremental updateは未対応 |
 | 描画・レンダリング | ❌ | 対象外。将来は別レイヤーとして検討 |
 
 ### Incremental Update
