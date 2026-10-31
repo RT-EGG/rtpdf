@@ -41,16 +41,23 @@ var pages = new PdfPageTreeBuilder(builder);
 var page = pages.AddPage(new PdfRectangle(0, 0, 595, 842));
 
 page.CropBox = new PdfRectangle(20, 20, 575, 822);
-page.AddContent(new PdfStream(new PdfDictionary(), contentBytes));
+var content = new PdfContentStreamBuilder()
+    .SaveGraphicsState()
+    .ConcatenateMatrix(320, 0, 0, 240, 100, 300)
+    .DrawXObject("Image1")
+    .RestoreGraphicsState();
+page.AddContent(content.Build());
 
 PdfDocumentWriter.Write("output.pdf", builder);
 ```
 
 `PdfPageBuilder`は`MediaBox`、`CropBox`、90度単位の回転、Page Resources、単一または複数のContent Streamを管理します。`SetResource(category, name, value)`で`XObject`などの名前付きresourceも登録できます。現時点のPage Treeは1階層のflat構造です。
 
+`PdfContentStreamBuilder`は直接operandとoperatorを正規化した構文で出力します。任意のoperatorは`AppendOperation`で追加でき、画像配置で使用する`q`、`cm`、`Do`、`Q`には型付きメソッドがあります。`q`と`Q`の対応、直接object制約、命令数・operand数・生成byte数を検証します。operator固有のoperand数・意味検証とinline imageには対応していません。
+
 Writerは従来形式のxref table、trailer、`startxref`を生成し、objectのbyte offsetとStreamの`/Length`を自動計算します。ファイルパスと書き込み可能な`Stream`に対応し、出力Streamはseek可能である必要がありません。Dictionary entryはNameのbyte順、間接objectは登録順で出力されるため、同じモデルから再現可能な結果を生成します。
 
-現時点では新規PDFの低レベル生成だけに対応します。既存PDFの完全保存、incremental update、xref/object streamの生成、自動圧縮、暗号化、電子署名、フォント・画像・Content Streamを組み立てる高レベルAPIには対応していません。`PdfStream`へ設定したencoded dataと`/Filter`はそのまま書き込まれます。
+現時点では新規PDFの低レベル生成だけに対応します。既存PDFの完全保存、incremental update、xref/object streamの生成、自動圧縮、暗号化、電子署名、フォントやImage XObjectを組み立てる高レベルAPIには対応していません。`PdfStream`へ設定したencoded dataと`/Filter`はそのまま書き込まれます。
 
 ## PDFバージョンの扱い
 
@@ -88,6 +95,7 @@ Writerは従来形式のxref table、trailer、`startxref`を生成し、object�
 | Stream境界 | ✅ | 直接・間接`/Length`に対応。データ中の`endstream`文字列には依存しない |
 | Stream Filter | ⚠️ | Flate、LZW、ASCIIHex、ASCII85、RunLengthに対応。画像Codec系は未対応 |
 | Content Streamの命令解析 | ⚠️ | 展開済みStreamから直接operandとoperatorを命令単位に解析。inline imageとoperator semanticsは未対応 |
+| Content Streamの命令生成 | ⚠️ | 汎用operatorと`q`・`Q`・`cm`・`Do`を生成。直接operand、graphics state対応、各種上限を検証 |
 | 暗号化PDF | ⚠️ | Standard Security Handler Revision 2～4、RC4、AES-128、user/owner passwordに対応 |
 | Writer・保存 | ⚠️ | 新規PDF、flat Page Tree、Page属性・Resources・Contents、従来xref table、trailer、Streamに対応。完全保存とincremental updateは未対応 |
 | 描画・レンダリング | ❌ | 対象外。将来は別レイヤーとして検討 |
@@ -150,6 +158,10 @@ foreach (var operation in operations)
 ArrayやDictionaryを含む直接オブジェクト、コメント、PDFの空白文字に対応します。複合operand内に現れる間接参照と、operatorを伴わず末尾に残ったoperandは`PdfContentStreamException`になります。content stream直下の`1 0 R`は、文法どおり2つの数値operandとoperator `R`として扱います。
 
 inline imageの`BI ... ID ... EI`は、画像データ中に現れる`EI`との境界判定が必要なため未対応です。`BI`、または単独の`ID`・`EI`を検出した場合は、別のoperatorとして誤って扱わず`PdfContentStreamException`で明示的に失敗します。
+
+### Content Stream Builder
+
+`PdfContentStreamBuilder`は命令ごとにoperandをbyte列へ確定し、`Build()`で無Filterの`PdfStream`を返します。ArrayやDictionaryを追加後に変更しても、すでに追加した命令には影響しません。Content Streamでは禁止される間接参照とStream operand、直接objectの循環、設定上限を超えるネストを拒否します。`Build()`時には保存されたgraphics stateがすべて`Q`で復元されている必要があります。
 
 ## StreamとFilterの対応
 
@@ -233,6 +245,7 @@ StreamはFilter展開前に復号され、object streamは外側のStreamだけ�
 | `MaximumOperations` | 1,000,000 | 1つのContent Streamの命令数 |
 | `MaximumOperandsPerOperation` | 100,000 | 1つのContent Stream命令のoperand数 |
 | `MaximumOperatorLength` | 127 bytes | Content Streamのoperator名 |
+| `MaximumContentLength` | 256 MiB | Content Stream Builderが生成するdecoded命令列 |
 | `MaximumObjectNestingDepth` | 100 | Writerが出力する直接object graphの深さ |
 
 これらは対応可能な最大PDF仕様を表す値ではなく、現在の既定の防御上限です。入力元や用途に応じてOptionsから変更できます。
