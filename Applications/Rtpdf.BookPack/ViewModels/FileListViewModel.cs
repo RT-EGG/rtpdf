@@ -1,9 +1,11 @@
 ﻿using ApplicationHelper;
 using ApplicationHelper.ViewModel;
 using Avalonia.Media.Imaging;
+using Rtpdf.BookPack.Core;
 using Rtpdf.BookPack.Models;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
@@ -25,12 +27,19 @@ internal class FileListViewModel : ViewModelBase
         {
             try
             {
-                Bitmap? bitmap = new Bitmap(filePath);
-                ListBox.Items.Add(new FileViewModel(new ImageFileModel(filePath, bitmap)));
+                using var bitmap = new Bitmap(filePath);
+                ListBox.Items.Add(new FileViewModel(
+                    new ImageFileModel(
+                        filePath,
+                        true,
+                        bitmap.PixelSize.Width,
+                        bitmap.PixelSize.Height
+                    )
+                ));
             }
             catch
             {
-                ListBox.Items.Add(new FileViewModel(new ImageFileModel(filePath, null)));
+                ListBox.Items.Add(new FileViewModel(new ImageFileModel(filePath, false, 0, 0)));
                 onFileError?.Invoke(filePath);
             }
         }
@@ -60,12 +69,21 @@ internal class FileListViewModel : ViewModelBase
         }
     }
 
+    public async Task SaveToFileAsync(string filePath, BookPackOptions options, Action<double> onProgress)
+    {
+        var images = ListBox.Items
+            .Select(f => f.Model)
+            .Where(image => image is not null)
+            .Where(image => image.IsValidFile)
+            .OfType<ImageFileModel>()
+            .ToArray();
+
+        var packer = new Core.BookPacker();
+        await packer.PackImagesToFile(filePath, images, options, onProgress);
+    }
+
     public void Clear()
     {
-        foreach (var item in ListBox.Items)
-        {
-            item.Dispose();
-        }
         ListBox.Items.Clear();
     }
 
